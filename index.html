@@ -1,0 +1,2773 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>โต๊ะตลิ่งชัน</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: a two-sided play mat — opponent's half mirrored on top, shared Land Magic strip in the middle, your half and hand at the bottom; card preview + log in a side rail. */
+:root{
+  --ink:#121019;        /* table ground */
+  --mat:#1b1724;        /* zone fill */
+  --mat2:#241f31;       /* raised */
+  --line:#3a3249;       /* zone outlines */
+  --gold:#d6a84e;       /* you */
+  --red:#d2604f;        /* opponent */
+  --fg:#efe9df;
+  --mute:#9a90aa;
+  --good:#6fbf8a;
+  --f-disp:'Chakra Petch','Sarabun',system-ui,sans-serif;
+  --f-body:'Sarabun','Chakra Petch',system-ui,sans-serif;
+  --cw:clamp(44px,5.6vw,92px);
+  --ch:calc(var(--cw)*1.36);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--ink);color:var(--fg);font-family:var(--f-body);font-size:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px;
+  background-image:radial-gradient(ellipse at 50% 50%,#1e1a2a 0,var(--ink) 70%)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:var(--mat2);border:1px solid var(--line);border-radius:7px;padding:6px 11px;line-height:1.2}
+button:hover{border-color:var(--gold)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.card:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+button.pri{background:var(--gold);color:#1a1408;border-color:var(--gold);font-weight:700}
+button.ghost{background:transparent}
+button:disabled{opacity:.45;cursor:default}
+input,select,textarea{background:var(--mat);border:1px solid var(--line);border-radius:7px;padding:6px 9px;min-width:0}
+h1,h2,h3{font-family:var(--f-disp);margin:0;text-wrap:balance}
+.lbl{font-family:var(--f-disp);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.muted{color:var(--mute)}
+.screen{max-width:1500px;margin:0 auto}
+
+/* top bar */
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:6px 0 10px;border-bottom:1px solid var(--line);margin-bottom:10px}
+.brand{font-family:var(--f-disp);font-weight:700;font-size:18px;letter-spacing:.04em}
+.brand b{color:var(--gold)}
+.tabs{display:flex;gap:4px}
+.tabs button[aria-pressed=true]{border-color:var(--gold);color:var(--gold)}
+.pill{font-family:var(--f-disp);font-size:12px;padding:3px 9px;border-radius:99px;border:1px solid var(--line);color:var(--mute);white-space:nowrap}
+.pill.on{color:var(--good);border-color:var(--good)}
+.spacer{flex:1}
+
+/* cards */
+.card{width:var(--cw);height:var(--ch);border-radius:calc(var(--cw)*.06);background-color:#2a2435;background-repeat:no-repeat;position:relative;flex:none;
+  box-shadow:0 1px 3px rgba(0,0,0,.5);transition:transform .15s;user-select:none;-webkit-user-select:none}
+.card.back{background:repeating-linear-gradient(45deg,#3b2b52 0 6px,#33264a 6px 12px);border:2px solid #5a4678}
+.card.back::after{content:"ตลิ่งชัน";position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-disp);font-weight:700;color:#cdb6f0;font-size:calc(var(--cw)*.15);letter-spacing:.05em;writing-mode:vertical-rl}
+.card.rest{transform:rotate(90deg) scale(.86)}
+.card .mod{position:absolute;right:-4px;bottom:-4px;background:var(--gold);color:#1a1408;font-family:var(--f-disp);font-weight:700;font-size:12px;border-radius:99px;padding:1px 6px;transform:none}
+.card .mod.neg{background:var(--red);color:#fff}
+.card.rest .mod{transform:rotate(-90deg)}
+.card .cnt{position:absolute;top:3px;left:3px;background:rgba(0,0,0,.75);color:#fff;font-family:var(--f-disp);font-weight:700;font-size:12px;border-radius:5px;padding:0 5px}
+.card.mine{cursor:pointer}
+.card.mine:hover{transform:translateY(-3px)}
+.card.rest.mine:hover{transform:rotate(90deg) scale(.86) translateX(-3px)}
+.card.dragging{opacity:.4}
+.card.nofile::before{content:attr(data-name);position:absolute;inset:4px;font-size:10px;color:var(--mute);overflow:hidden}
+
+/* table */
+.game{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:12px}
+@media (max-width:1100px){.game{grid-template-columns:minmax(0,1fr)}.rail{order:-1}}
+.side{border:1px solid var(--line);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:8px;background:rgba(27,23,36,.6);position:relative}
+.side.me{border-color:color-mix(in srgb,var(--gold) 45%,var(--line))}
+.side.op{border-color:color-mix(in srgb,var(--red) 45%,var(--line))}
+.side .who{display:flex;gap:8px;align-items:center;font-family:var(--f-disp);font-weight:600}
+.side.me .who .dot{background:var(--gold)} .side.op .who .dot{background:var(--red)}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.zrow{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
+.zone{border:1px dashed var(--line);border-radius:9px;padding:5px;display:flex;flex-direction:column;gap:4px;min-width:0;background:rgba(18,16,25,.35)}
+.zone.drop{border-color:var(--gold);background:rgba(214,168,78,.08)}
+.zone .zl{font-family:var(--f-disp);font-size:10.5px;letter-spacing:.1em;color:var(--mute);display:flex;justify-content:space-between;gap:6px;text-transform:uppercase}
+.slots{display:flex;gap:6px;flex-wrap:wrap;min-height:var(--ch);align-items:center}
+.slot{width:var(--cw);height:var(--ch);border-radius:calc(var(--cw)*.06);border:1px solid rgba(154,144,170,.18);display:grid;place-items:center;flex:none}
+.z-av{flex:1 1 auto}
+.z-mg{flex:1 1 200px}
+.pile{align-items:center}
+.pile .card{cursor:pointer}
+.pile .empty{width:var(--cw);height:var(--ch);border-radius:6px;border:1px solid rgba(154,144,170,.18);display:grid;place-items:center;color:var(--mute);font-size:11px}
+.lifez .slots{gap:3px}
+.board{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:start}
+.board.op{grid-template-columns:minmax(0,1fr) auto}
+.bmain{display:flex;flex-direction:column;gap:8px;min-width:0}
+.lifez .slots{flex-direction:column;flex-wrap:nowrap;gap:0;align-items:center;padding-block:4px}
+.lifez .fc+.fc{margin-top:calc(var(--cw)*-.36)}
+.lifez .fc.mine:hover{transform:translateX(5px)}
+.lifez .lostmsg{font-family:var(--f-disp);color:var(--red);font-weight:700}
+.hand{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;min-height:calc(var(--ch) + 12px);padding:6px;border-radius:10px;background:rgba(214,168,78,.05);border:1px solid var(--line)}
+.hand.op{background:rgba(210,96,79,.05)}
+.hand .card.mine:hover{transform:translateY(-8px)}
+.mid{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:center;padding:6px 4px}
+.mid .land{display:flex;flex-direction:column;gap:4px;align-items:center}
+.mid .reveal{justify-content:flex-end}
+#aimHint{font-family:var(--f-disp);color:var(--red);font-weight:600}
+.slot.h{width:var(--ch);height:var(--cw)}
+
+/* field card wrapper: holds the art upright or sideways, plus status badges that stay readable */
+.fc{position:relative;flex:none;width:var(--cw);height:var(--ch);transition:transform .15s}
+.fc.h{width:var(--ch);height:var(--cw)}
+.fc>.card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+.fc.h>.card{transform:translate(-50%,-50%) rotate(90deg)}
+.fc.h .card.back::after{writing-mode:horizontal-tb;transform:rotate(-90deg)}
+.fc.mine{cursor:pointer}
+.fc.mine:hover{transform:translateY(-3px)}
+.fc .mod{position:absolute;right:-4px;bottom:-4px;background:var(--gold);color:#1a1408;font-family:var(--f-disp);font-weight:700;font-size:12px;border-radius:99px;padding:1px 6px;z-index:2}
+.fc .mod.neg{background:var(--red);color:#fff}
+.fc .tagu{position:absolute;left:3px;top:3px;background:var(--good);color:#0d1a12;font-family:var(--f-disp);font-weight:700;font-size:10.5px;border-radius:4px;padding:1px 5px;z-index:2;white-space:nowrap}
+.fc .tagn{position:absolute;left:3px;right:3px;bottom:3px;background:rgba(10,8,14,.88);color:#fff;font-size:10.5px;line-height:1.3;border-radius:4px;border-left:3px solid var(--gold);padding:1px 4px;z-index:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side.op .fc .tagn{border-left-color:var(--red)}
+.fc.used>.card{filter:saturate(.55) brightness(.8)}
+
+/* targeting */
+body.aiming #v-game [data-u]{outline:2px dashed var(--red);outline-offset:2px;cursor:crosshair}
+body.aiming #v-game [data-u]:hover{outline-style:solid;outline-width:3px}
+#arrows{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:30;overflow:visible}
+.arw{fill:none;stroke-width:4;stroke-linecap:round;stroke-dasharray:10 7;animation:dash .8s linear infinite}
+.arw.G{stroke:var(--gold)} .arw.R{stroke:var(--red)}
+.arwdot.G{fill:var(--gold)} .arwdot.R{fill:var(--red)}
+.arwshadow{fill:none;stroke:rgba(0,0,0,.55);stroke-width:8;stroke-linecap:round}
+@keyframes dash{to{stroke-dashoffset:-17}}
+.turnctl{display:flex;gap:6px;flex-wrap:wrap}
+.reveal{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+
+/* rail */
+.rail{display:flex;flex-direction:column;gap:10px;min-width:0}
+.preview{aspect-ratio:300/408;width:100%;max-width:280px;border-radius:12px;background-color:var(--mat);border:1px solid var(--line);background-repeat:no-repeat;position:relative}
+@media (max-width:1100px){.preview{display:none}}
+.pinfo{font-size:13px;line-height:1.45}
+.pinfo b{font-family:var(--f-disp)}
+.log{border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:3px;max-height:340px;overflow:auto;font-size:13px}
+.log .e{display:flex;gap:6px}
+.log .e i{font-style:normal;flex:none}
+.log .e.me i{color:var(--gold)} .log .e.op i{color:var(--red)}
+
+/* popover menu */
+.menu{position:fixed;z-index:50;background:var(--mat2);border:1px solid var(--line);border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:3px;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:80vh;overflow:auto}
+.menu .mh{font-family:var(--f-disp);font-weight:600;padding:4px 6px 6px;border-bottom:1px solid var(--line);margin-bottom:3px;max-width:240px}
+.menu button{text-align:left;background:transparent;border-color:transparent}
+.menu button:hover{background:var(--mat);border-color:var(--line)}
+.menu .sep{height:1px;background:var(--line);margin:3px 0}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:40;background:rgba(8,6,12,.72);display:grid;place-items:center;padding:16px}
+.modal .box{background:var(--mat);border:1px solid var(--line);border-radius:14px;padding:14px;width:min(980px,100%);max-height:88vh;display:flex;flex-direction:column;gap:10px}
+.modal .grid{display:flex;flex-wrap:wrap;gap:8px;overflow:auto;padding:4px}
+
+/* deck builder */
+.db{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px}
+@media (max-width:900px){.db{grid-template-columns:minmax(0,1fr)}}
+.filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.filters input[type=search]{flex:1 1 200px}
+.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px;margin-top:10px;max-height:calc(100vh - 220px);overflow:auto;padding:2px}
+.rc{display:flex;flex-direction:column;gap:4px;cursor:pointer;position:relative}
+.rc .card{--cw:100%;width:100%;height:auto;aspect-ratio:300/408}
+.rc .nm{font-size:12px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rc .badge{position:absolute;top:6px;right:6px;background:var(--gold);color:#1a1408;font-family:var(--f-disp);font-weight:700;border-radius:99px;min-width:24px;text-align:center;padding:1px 6px}
+.rc:hover .card{outline:2px solid var(--gold)}
+.decklist{border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 140px);overflow:auto}
+.dl-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:6px;align-items:center;font-size:13px;padding:2px 0}
+.dl-row .q{font-family:var(--f-disp);font-weight:700;color:var(--gold);text-align:right;font-variant-numeric:tabular-nums}
+.dl-row .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-row button{padding:1px 7px}
+.count{font-family:var(--f-disp);font-variant-numeric:tabular-nums}
+.count.ok{color:var(--good)} .count.bad{color:var(--red)}
+.warn{color:var(--red);font-size:12.5px}
+
+/* lobby */
+.lobby{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px;max-width:1000px;margin:20px auto}
+.panel{border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px;background:rgba(27,23,36,.7)}
+.panel h2{font-size:20px}
+.code{font-family:var(--f-disp);font-size:28px;letter-spacing:.2em;color:var(--gold)}
+.field{display:flex;flex-direction:column;gap:4px}
+.note{font-size:13px;color:var(--mute);line-height:1.5}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--mat2);border:1px solid var(--gold);padding:8px 14px;border-radius:9px;z-index:60;font-family:var(--f-disp)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="screen">
+  <div class="bar">
+    <div class="brand">โต๊ะ<b>ตลิ่งชัน</b></div>
+    <div class="tabs" role="tablist">
+      <button id="tab-lobby" aria-pressed="true">เข้าห้อง</button>
+      <button id="tab-deck" aria-pressed="false">จัดเด็ค</button>
+      <button id="tab-game" aria-pressed="false">โต๊ะเล่น</button>
+    </div>
+    <div class="spacer"></div>
+    <span id="netpill" class="pill">กำลังโหลดการ์ด…</span>
+  </div>
+
+  <!-- LOBBY -->
+  <section id="v-lobby">
+    <div class="lobby">
+      <div class="panel">
+        <h2>เริ่มเล่น</h2>
+        <div class="field"><label class="lbl" for="nick">ชื่อในเกม</label><input id="nick" maxlength="20" placeholder="เช่น Alpha"></div>
+        <div class="field"><label class="lbl" for="deckSel">เด็คที่ใช้</label><select id="deckSel"></select></div>
+        <div class="field"><label class="lbl" for="startHand">จั่วเริ่มเกม (ใบ)</label><input id="startHand" type="number" min="0" max="10" value="5" style="max-width:90px"></div>
+        <div class="field">
+          <span class="lbl">รหัสห้อง</span>
+          <div class="row"><span id="newCode" class="code">----</span><button id="regen" class="ghost">สุ่มใหม่</button></div>
+          <button id="createBtn" class="pri">สร้างห้องด้วยรหัสนี้</button>
+        </div>
+        <div class="field">
+          <label class="lbl" for="joinCode">หรือใส่รหัสห้องของเพื่อน</label>
+          <div class="row"><input id="joinCode" maxlength="6" placeholder="ABCD" style="text-transform:uppercase;letter-spacing:.2em;max-width:140px"><button id="joinBtn">เข้าห้อง</button><button id="watchBtn" class="ghost">ดูอย่างเดียว</button></div>
+        </div>
+        <button id="soloBtn" class="ghost">ซ้อมคนเดียว (ไม่ต้องมีห้อง)</button>
+      </div>
+      <div class="panel">
+        <h2>เล่นกับเพื่อนยังไง</h2>
+        <ol class="note" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+          <li>ส่งลิงก์เว็บนี้ให้เพื่อน เปิดได้ทั้งคอมและมือถือ ไม่ต้องสมัครอะไร</li>
+          <li>ทั้งสองคนใส่ชื่อ เลือกเด็ค</li>
+          <li>คนหนึ่งกดสร้างห้อง แล้วส่งรหัส 4 ตัวให้อีกคนกดเข้าห้อง</li>
+          <li>การ์ดบนมือและลำดับเด็คอยู่ในเครื่องเราเท่านั้น อีกฝ่ายเห็นแค่จำนวน</li>
+        </ol>
+        <p class="note" style="margin:0">เกมไม่บังคับกติกา ผู้เล่นจัดการเองเหมือนเล่นบนโต๊ะจริง: คลิกการ์ดเพื่อเลือกคำสั่ง หรือลากวางลงโซน (บนคอม) จ่าย Gem = ทิ้งการ์ดบนมือลงนรก</p>
+        <p class="note" style="margin:0">รีเฟรชหน้าแล้วกลับเข้าห้องรหัสเดิม กระดานจะกลับมาเหมือนเดิม</p>
+        <p class="note" style="margin:0">สองเครื่องเชื่อมกันตรง ถ้าขึ้นว่าต่อไม่ได้นานเกิน 15 วินาที ลองเปลี่ยนไปใช้เน็ตมือถือ เพราะ Wi-Fi บางที่ (เช่นที่ทำงาน) บล็อกการเชื่อมต่อแบบนี้</p>
+        <p class="note" style="margin:0;font-size:12px">รูปและข้อมูลการ์ด Battle of Talingchan เป็นของ Lion House / Pasulol ดึงจาก bottcg.com ใช้สำหรับเล่นกันเอง</p>
+        <div id="openRooms" class="note"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DECK BUILDER -->
+  <section id="v-deck" hidden>
+    <div class="db">
+      <div>
+        <div class="filters">
+          <input id="q" type="search" placeholder="ค้นชื่อ / เลขการ์ด / Symbol">
+          <select id="fType"><option value="">ทุกประเภท</option><option value="A">Avatar</option><option value="M">Magic</option><option value="C">Construct</option><option value="L">Life</option><option value="T">Token</option></select>
+          <select id="fColor"><option value="">ทุกสี</option><option value="R">แดง</option><option value="B">ฟ้า</option><option value="G">เขียว</option><option value="P">ม่วง</option><option value="-">ไม่มีสี</option></select>
+          <select id="fCost"><option value="">ทุก Cost</option></select>
+          <select id="fSet"><option value="">ทุกชุด</option></select>
+        </div>
+        <div class="muted" style="font-size:12.5px;margin-top:6px" id="resInfo"></div>
+        <div class="results" id="results"></div>
+      </div>
+      <div class="decklist">
+        <div class="row"><input id="deckName" placeholder="ชื่อเด็ค" style="flex:1"><button id="saveDeck" class="pri">บันทึก</button></div>
+        <div class="row" style="font-size:13px">
+          <span>เด็คหลัก <b id="mainCount" class="count">0</b>/50</span>
+          <span>Life <b id="lifeCount" class="count">0</b>/5</span>
+          <div class="spacer"></div>
+          <button id="newDeck" class="ghost">เด็คใหม่</button>
+        </div>
+        <div id="deckWarn" class="warn"></div>
+        <div><div class="lbl">Life</div><div id="dlLife"></div></div>
+        <div><div class="lbl">เด็คหลัก</div><div id="dlMain"></div></div>
+        <div class="lbl" style="margin-top:6px">เด็คที่บันทึกไว้</div>
+        <div id="savedDecks" style="display:flex;flex-direction:column;gap:4px"></div>
+        <details>
+          <summary class="lbl" style="cursor:pointer">นำเข้า / ส่งออกเป็นข้อความ</summary>
+          <p class="note">รูปแบบ: บรรทัดละ <code>4 BT01-001</code> ใส่ <code>-SCR</code> ต่อท้ายเลขสำหรับการ์ดพิเศษ</p>
+          <textarea id="deckText" rows="8" style="width:100%"></textarea>
+          <div class="row"><button id="exportTxt">ส่งออก</button><button id="importTxt">นำเข้า</button></div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="v-game" hidden>
+    <div class="game">
+      <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
+        <div id="opSide"></div>
+        <div class="mid">
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0"><div id="aimHint"></div><button id="bArrows" hidden>ล้างลูกศร</button></div>
+          <div class="land"><span class="lbl">Land Magic</span><div id="landSlot"></div><span id="landOwner" class="muted" style="font-size:12px"></span></div>
+          <div class="reveal" id="revealRow"></div>
+        </div>
+        <div id="meSide"></div>
+        <div class="row" id="myCtl" style="justify-content:space-between">
+          <div class="turnctl">
+            <button id="bDraw">จั่ว 1</button>
+            <button id="bWake">ตื่นทั้งหมด</button>
+            <button id="bEnd" class="pri">จบเทิร์น</button>
+          </div>
+          <div class="turnctl">
+            <button id="bCoin" class="ghost">ทอยเหรียญ</button>
+            <button id="bDice" class="ghost">ทอยเต๋า</button>
+            <button id="bMull" class="ghost">Mulligan</button>
+            <button id="bNew" class="ghost">เริ่มเกมใหม่</button>
+            <button id="bLeave" class="ghost">ออกจากห้อง</button>
+          </div>
+        </div>
+      </div>
+      <aside class="rail">
+        <div class="preview" id="preview"></div>
+        <div class="pinfo" id="pinfo"><span class="muted">ชี้หรือแตะการ์ดเพื่อดูรายละเอียด</span></div>
+        <div class="lbl">บันทึกการเล่น</div>
+        <div class="log" id="log"></div>
+      </aside>
+    </div>
+  </section>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="text/plain" id="carddb">พระอิศวร|A|SD01-001|6|5|R|เทพ|||2||
+พระนารายณ์|A|SD01-002|4|4|R|เทพ|||1||
+พระอินทร์|A|SD01-003|2|2|R|เทพ|||2||
+นนทก|A|SD01-004|1|1|R|ยักษ์|||2||
+เมียพระอิศวร|A|SD01-005|3|5|R|เทพ||1|4||
+เมียพระอิศวร|A|SD01-005|3|5|R|เทพ||1|4|PR|
+เมียพระอิศวร|A|SD01-005|3|5|R|เทพ||1|4|CBR|
+ช่างแอร์ดวงซวย|A|SD01-006|0|0|R|เทพ|||4||
+เทวดานักมวย|A|SD01-007|1|3|R|เทพ|||1||
+เทวดาแบงค์|A|SD01-008|1|4|R|เทพ|||0||
+เด็กถ่ายเอกสาร|A|SD01-009|2|2|R|เทพ|||3||
+เทวดาตัวเปิด|A|SD01-010|0|3|R|เทพ|||0||
+ยักษ์ล้างส้วม|A|SD01-011|0|1|R|ยักษ์|||1||
+ยักษ์แบกปูน|A|SD01-012|1|2|R|ยักษ์|||2||
+เทวดาจิตบำบัด|A|SD01-013|1|1|R|เทพ|||3||
+เทวดาเลื่อยยนต์|A|SD01-014|4|4|R|เทพ|||2||
+วิรุฬหก|A|SD01-015|5|5|R|เทพ|||3||
+น้ำแดง|M|SD01-016|1|||จอมเวทย์|M||||
+อุบัติเหตุ!!!|M|SD01-017|1|||จอมเวทย์|R||||
+ความยุติธรรมสำหรับนนทก|M|SD01-018|1|||จอมเวทย์|N||||
+ฮ่า ฮ่า ฮ่า ผมได้เลื่อนขั้น|M|SD01-019|2|||จอมเวทย์|N||||
+เขาไกรลาส|M|SD01-020|2|||จอมเวทย์|L||||
+ไม่นะ อิศวร !|L|SD01-021|||||||||
+ไม่นะ นนทก !|L|SD01-022|||||||||
+ไม่นะ อัปสร !|L|SD01-023|||||||||
+ไม่นะ ซาร่า !|L|SD01-024|||||||||
+ไม่นะ หลวงพ่อ !|L|SD01-025|||||||||
+กุ่ย|A|SD02-001|2|2|B|คน|||2||
+ฮอล|A|SD02-002|2|2|B|คน|||2||
+นาย|A|SD02-003|2|2|B|คน|||2||
+ริกกี้ เพื่อนรัก|A|SD02-004|3|1|B|แมลง|||2||
+วีรบุรุษปากซอย|A|SD02-005|6|6|B|คน||1|2||
+วีรบุรุษปากซอย|A|SD02-005|6|6|B|คน||1|2|PR|
+วีรบุรุษปากซอย|A|SD02-005|6|6|B|คน||1|2|CBR|
+ครูภาษาไทย|A|SD02-006|0|0|B|คน|||4||
+นักเรียน แบงค์|A|SD02-007|1|3|B|คน|||1||
+เด็กไม่ชอบแมลงสาบมากๆ|A|SD02-008|1|4|B|คน|||0||
+ตำรวจ|A|SD02-009|2|2|B|คน|||3||
+เด็กไม่ชอบแมลงสาบ|A|SD02-010|0|3|B|คน|||0||
+ลุงข้างห้อง|A|SD02-011|0|1|B|คน|||0||
+แท็กซี่ตีนเปล่า|A|SD02-012|1|2|B|คน|||2||
+ไอ้ดำ|A|SD02-013|1|1|B|สัตว์|||3||
+ปื๊ด เด็กติดยา|A|SD02-014|4|4|B|คน|||2||
+รัททาทุย ผู้พิทักษ์ราชีนี|A|SD02-015|5|5|B|รัททาทุย|||3||
+ระเบิดVery Fat Man|M|SD02-016|0|||จอมเวทย์|R||||
+ไม้เกาหลัง|M|SD02-017|2|||รัททาทุย|M||||
+บำเพ็ญประโยชน์|M|SD02-018|1|||จอมเวทย์|N||||
+สละเพื่อนเพื่อช่วยเพื่อน|M|SD02-019|1|||จอมเวทย์|R||||
+สมชาย ห้องเช่าถูกๆ|M|SD02-020|1|||จอมเวทย์|L||||
+ไม่นะ กุ่ย !|L|SD02-021|||||||||
+ไม่นะ ฮอล !|L|SD02-022|||||||||
+ไม่นะ นาย !|L|SD02-023|||||||||
+ไม่นะ ครู !|L|SD02-024|||||||||
+ไม่นะ จามาล !|L|SD02-025|||||||||
+พญายม|A|SD03-001|5|5|P|นรก|||1||
+นายนิรยบาล พ่อจีจ้า|A|SD03-002|4|3|P|นรก|||1||
+นายนิรยบาล แว่น|A|SD03-003|0|4|P|นรก|||1||
+นายนิรยบาล อ้วน|A|SD03-004|2|2|P|นรก|||2||
+สุวาน|A|SD03-005|5|0|P|นรก||1|4||
+สุวาน|A|SD03-005|5|0|P|นรก||1|4|PR|
+สุวาน|A|SD03-005|5|0|P|นรก||1|4|CBR|
+นายนิรยบาล ชาวนา|A|SD03-006|2|3|P|นรก|||3||
+นายนิรยบาล ปฎิรูป|A|SD03-007|1|1|P|นรก|||4||
+นายนิรยบาล กล้าม|A|SD03-008|4|4|P|นรก|||3||
+นายนิรยบาล แบงค์|A|SD03-009|3|3|P|นรก|||3||
+แม่นีโม่ขยับไม่ได้|A|SD03-010|0|0|P|คน|||3||
+ปื้ด คนดี|A|SD03-011|3|3|P|นรก|||2||
+พวกบาปหนา|A|SD03-012|1|3|P|นรก|||0||
+เจ้าที่|A|SD03-013|0|1|P|ผี|||1||
+ตำรวจสัมภเวสี ปวิณ|A|SD03-014|2|3|P|ผี|||2||
+ตำรวจสัมภเวสี นิวัต|A|SD03-015|2|2|P|ผี|||3||
+กระทะทองแดง|M|SD03-016|1|||นรก|N||||
+บัญชีหนังหมา|M|SD03-017|1|||นรก|N||||
+หอกแหลมแทงทุกวัน|M|SD03-018|1|||นรก|M||||
+สิมพลีนรก|M|SD03-019|2|||นรก|L||||
+จิ้มมันเลย จิ้ม!|M|SD03-020|2|||นรก|R||||
+ไม่นะ แม่นีโม่ !|L|SD03-021|||||||||
+ไม่นะ เต๋า !|L|SD03-022|||||||||
+ไม่นะ ไอ้ดำ !|L|SD03-023|||||||||
+ไม่นะ แบงค์ !|L|SD03-024|||||||||
+ไม่นะ พญายม !|L|SD03-025|||||||||
+กัปตันแบงค์ Tank Ranger|A|SD04-001|4|4|G|คน|||1||
+จ่ามะนาว Tank Ranger|A|SD04-002|3|1|G|คน|||3||
+จ่าแดงเดือด Tank Ranger|A|SD04-003|3|1|G|คน|||3||
+รถถัง "Tank Ranger"|A|SD04-004|4|4|G|หุ่นยนต์|||2||
+MEGA ROR.DOR|A|SD04-005|6|6|G|หุ่นยนต์||1|3||
+MEGA ROR.DOR|A|SD04-005|6|6|G|หุ่นยนต์||1|3|PR|
+MEGA ROR.DOR|A|SD04-005|6|6|G|หุ่นยนต์||1|3|CBR|
+พลเอกปุ้มปุ้ย|A|SD04-006|4|0|G|คน|||0||
+สห ไล่จับเด็ก|A|SD04-007|2|2|G|คน|||3||
+อรุณีย์ ข้าวมันไก่เมียจ่า|A|SD04-008|0|0|G|คน|||4||
+พลทหาร|A|SD04-009|3|2|G|คน|||1||
+ทหารฝูงบินต่ำ|A|SD04-010|1|1|G|คน|||3||
+คนจับใบดำ|A|SD04-011|2|1|G|คน|||1||
+คนจับใบแดง|A|SD04-012|2|1|G|คน|||1||
+ไอ้หนุ่มรด.|A|SD04-013|1|0|G|คน|||3||
+รถถังลงถนน|M|SD04-014|2|||ทหาร|N||||
+ไอ นีด เมดิก|M|SD04-015|4|||ทหาร|N||||
+ใบดำใบแดง|M|SD04-016|1|||ทหาร|N||||
+เพื่อชาติ|M|SD04-017|3|||ทหาร|R||||
+ขึ้นมาเร็ว ไอ้ลูกลิง !!|M|SD04-018|3|||ทหาร|R||||
+ถาดหลุม|M|SD04-019|2|||ทหาร|M||||
+เขาชนไก่|M|SD04-020|1|||ทหาร|L||||
+ไม่นะ มะนาว !|L|SD04-021|||||||||
+ไม่นะ แดงเดือด !|L|SD04-022|||||||||
+ไม่นะ เจี๊ยบ !|L|SD04-023|||||||||
+อ๋อ...ปุ้มปุ้ยตาย !|L|SD04-024|||||||||
+ไม่นะ พระอินทร์ !|L|SD04-025|||||||||
+บึงทมิฬ  People - CEO คุณจิระ|A|SD05-001|4|2|B|ปลา|||3||
+บึงทมิฬ  People - คุณเค้นท์|A|SD05-002|3|3|B|ปลา|||2||
+บึงทมิฬ  People - คุณฮาร์วี่|A|SD05-003|1|1|B|ปลา|||1||
+บึงทมิฬ  People - คุณอังคณา|A|SD05-004|2|1|B|ปลา|||1||
+บึงทมิฬ  People - คุณพยาบาล|A|SD05-005|1|1|B|ปลา|||1||
+วอเตอร์แมน|A|SD05-006|5|4|B|คน||1|2||
+วอเตอร์แมน|A|SD05-006|5|4|B|คน||1|2|PR|
+วอเตอร์แมน|A|SD05-006|5|4|B|คน||1|2|CBR|
+บึงทมิฬ People - คุณบึกบึน|A|SD05-007|5|5|B|ปลา|||3||
+ปลาชโด กรามกุด|A|SD05-008|4|4|B|ปลา|||2||
+ปลาดาวกระจาย|A|SD05-009|1|1|B|ปลา|||3||
+กระเบนหางแหลมมาก|A|SD05-010|1|4|B|ปลา|||0||
+พิธีกรสารคดีดวงโบ๋|A|SD05-011|1|2|B|ปลา|||1||
+ปลาแบงค์|A|SD05-012|2|2|B|ปลา|||2||
+เหยื่อปลอม|A|SD05-013|0|0|B|หุ่นยนต์|||4||
+บึงทมิฬ|M|SD05-014|1|||ปลา|N||||
+กำเนิดจากน้ำ|M|SD05-015|2|||ปลา|N||||
+น้ำวนชักโครก|M|SD05-016|0|||ปลา|R||||
+ปืนฉมวก|M|SD05-017|2|||ปลา|M||||
+ตรีศูล ไตรตัน|M|SD05-018|1|||ปลา|M||||
+ประมาทร่วม|M|SD05-019|1|||จอมเวทย์|N||||
+ชายจากอนาคต|M|SD05-020|0|||จอมเวทย์|N||||
+ไม่นะ กัปตันไกร !|L|SD05-021|||||||||
+ไม่นะ มาวิน !|L|SD05-022|||||||||
+ไม่นะ วอเตอร์แมน !|L|SD05-023|||||||||
+ไม่นะ คุณจิระ !|L|SD05-024|||||||||
+ไม่นะ ไตรตั้น !|L|SD05-025|||||||||
+จัน หนวดเขี้ยว|A|SD06-001|6|6|R|คน||1|3||
+จัน หนวดเขี้ยว|A|SD06-001|6|6|R|คน||1|3|PR|
+จัน หนวดเขี้ยว|A|SD06-001|6|6|R|คน||1|3|CBR|
+อิน สไนเปอร์|A|SD06-002|3|2|R|คน|||2||
+ทองเหม็น ขวานคลั่ง|A|SD06-003|4|4|R|คน|||2||
+เมือง ช่างใหญ่|A|SD06-004|4|2|R|คน|||2||
+พันเรือง ผู้พิทักษ์ไร้พ่าย|A|SD06-005|4|2|R|คน|||3||
+พ่อแท่น ผู้นำอาวุโส|A|SD06-006|3|2|R|คน|||1||
+อาจารย์ธรรมโชติ|A|SD06-007|1|1|R|คน|||3||
+บุญช่วย ควายรักชาติ|A|SD06-008|2|2|R|สัตว์|||2||
+พม่าข้าศึก 2310|A|SD06-009|1|4|R|ต่างชาติ|||0||
+วีรชน แบงค์|A|SD06-010|0|3|R|คน|||0||
+ลูก เมีย|A|SD06-011|1|1|R|คน|||4||
+ผู้นำของเหล่าวีรชน|M|SD06-012|4|||จอมเวทย์|N||||
+วิญญาณวีรชน|M|SD06-013|2|||จอมเวทย์|N||||
+ไปเลยมอนตี้|M|SD06-014|1|||สัตว์|N||||
+ปืนใหญ่ไทยประดิษฐ์|M|SD06-015|2|||จอมเวทย์|R||||
+ยันต์ผ้าประเจียด|M|SD06-016|3|||จอมเวทย์|M||||
+ดาบใบข้าว X|M|SD06-017|3|||ต้นไม้|M||||
+ค่ายบางระจัน|C|SD06-018|4|6|R|สิ่งก่อสร้าง|||0||
+วัดคู่บ้านคู่เมือง|C|SD06-019|2|2|R|สิ่งก่อสร้าง|||3||
+กำแพงด่านสุดท้าย|C|SD06-020|4|4|R|สิ่งก่อสร้าง|||1||
+ไม่นะ จัน!|L|SD06-021|||||||||
+ไม่นะ ทองเหม็น!|L|SD06-022|||||||||
+ไม่นะ บุญช่วย!|L|SD06-023|||||||||
+ท่านผู้นำตายแล้ว!|L|SD06-024|||||||||
+ลูก เมีย กู!!!|L|SD06-025|||||||||
+กวนอู ขุนพลภักดีแห่งจ๊กก๊ก|A|SD07-001|4|4|G|ต่างชาติ|||1||
+เตียวหุย ขุนพลจอมบุกแห่งจ๊กก๊ก|A|SD07-002|5|4|G|ต่างชาติ|||2||
+แฮหัวตุ้น ขุนพลตาเดียวแห่งวุยก๊ก|A|SD07-003|4|4|B|ต่างชาติ|||2||
+แฮหัวเอี๋ยน ขุนพลธนูแห่งวุยก๊ก|A|SD07-004|3|1|B|ต่างชาติ|||3||
+ซุนเกี๋ยน ขุนพลพยัคฆ์แห่งง่อก๊ก|A|SD07-005|4|3|R|ต่างชาติ|||2||
+ซุนเซ็ก ขุนพลไฟแรงแห่งง่อก๊ก|A|SD07-006|3|2|R|ต่างชาติ|||2||
+ลิโป้ ขุนพลเทพสงคราม|A|SD07-007|8|7|P|ต่างชาติ||1|0||
+ลิโป้ ขุนพลเทพสงคราม|A|SD07-007|8|7|P|ต่างชาติ||1|0|PR|
+ลิโป้ ขุนพลเทพสงคราม|A|SD07-007|8|7|P|ต่างชาติ||1|0|CBR|
+อ้วนเสี้ยว ผู้นำขุนพล 18 หัวเมือง|A|SD07-008|5|2|B|ต่างชาติ|||2||
+ขุนศึกแบงค์ แซ่อู๋|A|SD07-009|4|2|P|ต่างชาติ|||2||
+พลเดินทัพ|A|SD07-010|2|2|R|ต่างชาติ|||3||
+พลเสบียง|A|SD07-011|0|0|G|สัตว์|||4||
+ชาวบ้านจ้าน|A|SD07-012|0|1|B|ต่างชาติ|||1||
+คำสาบานสวนท้อ|M|SD07-013|2|||จอมเวทย์|N||||
+ยืมมือสังหาร|M|SD07-014|0|||จอมเวทย์|N||||
+เสบียงหลวง|M|SD07-015|2|||จอมเวทย์|N||||
+หนีคือยอดกลยุทธ์|M|SD07-016|2|||จอมเวทย์|R||||
+หมอมาแล้วววว|M|SD07-017|3|||จอมเวทย์|R||||
+ง้าวมังกรเขียว|M|SD07-018|2|||จอมเวทย์|M||||
+เมืองลกเอี๋ยง|M|SD07-019|2|||จอมเวทย์|L||||
+ด่านเฮาโลก๋วน|C|SD07-020|4|3|P|สิ่งก่อสร้าง|||1||
+ไม่นะ เล่าปี่|L|SD07-021|||||||||
+ไม่นะ โจโฉ|L|SD07-022|||||||||
+ไม่นะ ซุนกวน|L|SD07-023|||||||||
+ตั๋งโต๊ะตายแล้วววว|L|SD07-024|||||||||
+ไม่นะ อาม่า|L|SD07-025|||||||||
+ไพรมอล รัททาทุย|A|SD08-001|6|6|B|รัททาทุย||1|2||
+ไพรมอล รัททาทุย|A|SD08-001|6|6|B|รัททาทุย||1|2|PR|
+ไพรมอล รัททาทุย|A|SD08-001|6|6|B|รัททาทุย||1|2|CBR|
+รัททาทุย พาหะ|A|SD08-002|1|1|B|รัททาทุย|||1||50
+รัททาทุย 2 แสนโวลต์|A|SD08-004|2|2|B|รัททาทุย|||3||
+รัททาทุย แบงค์|A|SD08-009|2|2|B|รัททาทุย|||4||
+เลือกมันสำหรับพวก จน !!!|M|SD08-013|1|||จอมเวทย์|N||||
+โดมรัททาทุย|A|SD08-003|3|1||รัททาทุย|||1||
+รัททาทุยกินซาก|A|SD08-005|5|0||รัททาทุย|||1||
+รัททาทุย พาราไซท์|A|SD08-006|2|2||รัททาทุย|||2||
+รัทาทุย หัวค้อน|A|SD08-007|3|1||รัททาทุย|||1||
+รัททาทุยโป๊|A|SD08-008|1|1||รัททาทุย|||1||
+ตุ๊กตารัททาทุย|A|SD08-010|1|0||รัททาทุย|||3||
+รัททาทุย เฝ้าทวาร|A|SD08-011|0|1||รัททาทุย|||3||
+กรุงโรมใน 1 วัน|M|SD08-012|1|||จอมเวทย์|N||||
+แพร่พันธ์ุทันใจ|M|SD08-014|1|||รัททาทุย|N||||
+รัททาท่วม|M|SD08-015|1|||รัททาทุย|R||||
+นวมรัททาทุย|M|SD08-016|3|||รัททาทุย|M||||
+พิภพรัททาทุย|M|SD08-017|3|||รัททาทุย|L||||
+รังรักรัททาทุย|C|SD08-018|3|3||รัททาทุย|||2||
+วงล้อรัททาทุย|C|SD08-019|2|2||รัททาทุย|||1||
+บ่อหมัก รัททาทุย|C|SD08-020|5|1||รัททาทุย|||4||
+เฮ้ย รัททาทุย ตาย !|L|SD08-021|||||||||
+ไม่นะ มณโท !|L|SD08-022|||||||||
+เฮ้ย นางพญา ตาย !|L|SD08-023|||||||||
+เฮ้ย พ่อพันธุ์ ตาย !|L|SD08-024|||||||||
+เฮ้ย รัททาทุย โป๊ !|L|SD08-025|||||||||
+หนุมาน วานรวายุ|A|SD09-001|4|4|G|สัตว์|||2||
+นิลพัท วานรสีกาฬ|A|SD09-002|4|4|G|สัตว์|||2||
+สุครีพ วานรปากแซ่บ|A|SD09-003|4|2|G|สัตว์|||2||
+พาลี วานรแห่งเมืองขีดขิน|A|SD09-004|7|8|G|สัตว์||1|1||
+พาลี วานรแห่งเมืองขีดขิน|A|SD09-004|7|8|G|สัตว์||1|1|PR|
+พาลี วานรแห่งเมืองขีดขิน|A|SD09-004|7|8|G|สัตว์||1|1|CBR|
+คิงคา วานรเจ้าป่า|A|SD09-005|4|3|G|สัตว์|||1||
+วานรกินซากลากอเวจี|A|SD09-006|2|1|G|สัตว์|||2||
+วานรถลกหนังฝังกระดูก|A|SD09-007|1|1|G|สัตว์|||4||
+วานรหมวกเหล็ก|A|SD09-008|3|1|G|สัตว์|||3||
+ดารา นางชั่ว|A|SD09-009|4|0|G|หุ่นยนต์|||2||
+วานร ซีซ่าสลัด|A|SD09-010|4|3|G|สัตว์|||2||
+ยายทองวานรจอมหักกระดูก|A|SD09-011|1|4|G|สัตว์|||0||
+ยักษ์แบงค์|A|SD09-012|1|3|G|ยักษ์|||1||
+หนุมานถวายแหวน|M|SD09-013|2||G|สัตว์|N||||
+เลือกตั้งเจ้าป่า|M|SD09-014|0||G|สัตว์|N||||
+เตรียมเสบียง|M|SD09-015|1||G|จอมเวทย์|N||||
+ชีวิตเหนือหน้าที่|M|SD09-016|2||G|จอมเวทย์|R||||
+วานรร้อนรัก|M|SD09-017|2||G|สัตว์|R||||
+ตรีเพชร|M|SD09-018|3||G|จอมเวทย์|M||||
+ดาบพระขรรค์|M|SD09-019|1||G|จอมเวทย์|M||||
+ป่าแห่งเมืองขีดขิน|M|SD09-020|1||G|ต้นไม้|L||||
+ไม่นะ หนุมาน|L|SD09-021|||||||||
+ไม่นะ นิลพัท|L|SD09-022|||||||||
+ไม่นะ คิงคา|L|SD09-023|||||||||
+นังชั่ว ตายแล้ว (ดารา)|L|SD09-024|||||||||
+ไม่นะ สุครีพ|L|SD09-025|||||||||
+วานร|T|SD09-026|1|1|G|สัตว์|||0||
+นนทก นิ้วเพชร|A|BT01-001|3|3|R|ยักษ์|||2||
+นนทก นิ้วเพชร|A|BT01-001|3|3|R|ยักษ์|||2|SCR|
+นนทก นิ้วเพชร|A|BT01-001|3|3|R|ยักษ์|||2|CBR|
+นนทก นิ้วเพชร|A|BT01-001|3|3|R|ยักษ์|||2|PR|
+ปื้ด เด็กเปรต|A|BT01-002|4|0|R|เปรต|||0||
+ปื้ด เด็กเปรต|A|BT01-002|4|0|R|เปรต|||0|SCR|
+พระเวสสุกรรม|A|BT01-003|4|3|R|เทพ|||1||
+หนุมาน|A|BT01-004|4|3|R|สัตว์|||2||
+อู๊ดลูกเสือ|A|BT01-005|3|3|R|คน|||1||
+ชาวบ้านขายน้ำ|A|BT01-006|3|2|R|คน|||2||
+ชาวบ้านขายน้ำ|A|BT01-006|3|2|R|คน|||2|SCR|
+แม่กบ|A|BT01-007|3|1|R|สัตว์|||1||
+รัททาทุย นางพญา|A|BT01-008|2|4|B|รัททาทุย||1|2||
+รัททาทุย นางพญา|A|BT01-008|2|4|B|รัททาทุย||1|2|SCR|
+รัททาทุย พ่อพันธุ์|A|BT01-009|3|2|B|รัททาทุย|||2||
+รัททาทุย|A|BT01-010|1|1|B|รัททาทุย|||1||50
+แมลงปอเลื่อยยนต์|A|BT01-011|3|3|B|แมลง|||2||
+ลูกแม่ศรีนวล|A|BT01-012|2|1|B|สัตว์|||2||
+พ่อบุญใหญ่|A|BT01-013|3|2|B|สัตว์|||3||
+พ่อบุญใหญ่|A|BT01-013|3|2|B|สัตว์|||3|SCR|
+จ่ามะนาว|A|BT01-014|3|4|B|คน|||2||
+จ่ามะนาว|A|BT01-014|3|4|B|คน|||2|SCR|
+นายนิรยบาล "เต๋า"|A|BT01-015|3|3|P|นรก|||2||
+สุวรรณ|A|BT01-016|3|2|P|นรก|||2||
+สุวรรณ|A|BT01-016|3|2|P|นรก|||2|SCR|
+ทศกัณฐ์ยักษ์ที่---เมียพระอิศวร|A|BT01-017|4|5|P|ยักษ์||1|3||
+ทศกัณฐ์ที่---เมียพระอิศวร|A|BT01-017|4|5|P|ยักษ์||1|3|SCR|
+นีโม่|A|BT01-018|0|0|P|คน|||3||
+ยมทูต|A|BT01-019|3|3|P|นรก|||2||
+ศาลพระภูมิ|A|BT01-020|4|2|P|ผี|||1||
+ศาลพระภูมิ|A|BT01-020|4|2|P|ผี|||1|SCR|
+สารวัตร ตำรวจสัมภเวสี|A|BT01-021|4|4|P|ผี|||1||
+ตึก|A|BT01-022|6|9|R|หุ่นยนต์||1|4||
+ลูกกบ|A|BT01-023|1|1|R|สัตว์|||1||
+พี่โด 2.0|A|BT01-024|8|8|R|หุ่นยนต์|||2||
+เทวดาตำรวจ|A|BT01-025|2|2|R|เทพ|||2||
+ครูวีรชัย|A|BT01-026|1|1|B|คน|||3||
+ลูกค้าชาบู|A|BT01-027|2|2|B|คน|||4||
+เจ้าของร้านชาบู|A|BT01-028|1|1|B|คน|||2||
+จ่าแดงเดือด|A|BT01-029|4|4|B|คน|||2||
+เฟนริล|A|BT01-030|5|5|P|สัตว์|||3||
+จอมมังการ์ด|A|BT01-031|5|6|P|สัตว์|||1||
+นายนิรยบาล ตัวใหญ่พิเศษ|A|BT01-032|9|3|P|นรก|||4||
+แบงค์ เทคนิคประทุมทู|A|BT01-033|4|4|P|คน|||2||
+กาลจักร|A|BT01-034|3|3|G|ยักษ์|||1||
+ประมาทร่วม|M|BT01-035|1|||จอมเวทย์|N||||
+เมตตาระยะยาว|M|BT01-036|0|||เทพ|N|1|||
+เมตตาระยะยาว|M|BT01-036|0|||เทพ|N|1||SCR|
+เพื่อลูกค้า|M|BT01-037|1|||จอมเวทย์|N||||
+ความเจริญ|M|BT01-038|1|||จอมเวทย์|N||||
+ความเจริญ|M|BT01-038|1|||จอมเวทย์|N|||SCR|
+เจ้ากล้าดียังไง|M|BT01-039|2|||เทพ|R||||
+หมอมาแล้วววว|M|BT01-040|3|||จอมเวทย์|R||||
+ชายจากอนาคต|M|BT01-041|0|||จอมเวทย์|R||||
+ชายจากอนาคต|M|BT01-041|0|||จอมเวทย์|R|||SCR|
+ริกกี้ นักปลอมแปลง|M|BT01-042|0|||แมลง|R||||
+ริกกี้ นักปลอมแปลง|M|BT01-042|0|||แมลง|R|||SCR|
+น้ำชูกำลัง|M|BT01-043|1|||จอมเวทย์|M||||
+รั้วของชาติ|M|BT01-044|2|||ทหาร|M||||
+ตีแม่|M|BT01-045|2|||คน|M||||
+ตีพ่อ|M|BT01-046|3|||คน|M||||
+เขาไกรลาสเอียง|M|BT01-047|1|||เทพ|L||||
+ทุ่งนาแดนนี้(ไม่มีความหมาย)|M|BT01-048|2|||ต้นไม้|L||||
+มวยทะเลลลลลล|M|BT01-049|1|||ฤษี|L||||
+โรงบาล|M|BT01-050|2|||จอมเวทย์|L||||
+ไม่นะ โปโป้ !|L|BT01-051|||||||||
+ไม่นะ พ่อ !|L|BT01-052|||||||||
+ไม่นะ แม่ !|L|BT01-053|||||||||
+ไม่นะ ลูก !|L|BT01-054|||||||||
+ไม่นะ เบิ้ม !|L|BT01-055|||||||||
+บุญลือ วีรบุรุษเปรต|A|BT02-001|4|0|R|เปรต|||0||
+บุญลือ วีรบุรุษเปรต|A|BT02-001|4|0|R|เปรต|||0|SCR|
+บุญลือ วีรบุรุษเปรต|A|BT02-001|4|0|R|เปรต|||0|PR|
+บุญลือ วีรบุรุษเปรต|A|BT02-001|4|0|R|เปรต|||0|CBR|
+วันชัย พ่อบุญลือ|A|BT02-002|5|1|R|คน|||2||
+กัญญา แม่บุญลือ|A|BT02-003|3|2|R|คน|||2||
+พี่เช 10 ล้อท่าอิฐ|A|BT02-004|4|2|R|หุ่นยนต์|||3||
+ตำรวจไซบอร์ค จ่าคอป|A|BT02-005|4|3|R|หุ่นยนต์|||1||
+คนรวย|A|BT02-006|5|1|R|คน|||4||
+คนรวย|A|BT02-006|5|1|R|คน|||4|SCR|
+อ๊บ|A|BT02-007|1|1|R|สัตว์|||2||
+พระพรหม|A|BT02-008|8|6|R|เทพ|||2||
+พระพรหม|A|BT02-008|8|6|R|เทพ|||2|SCR|
+มีมมิจัง ไอดอลหน้าใหม่|A|BT02-009|4|2|B|คน|||2||
+โอตะ รุ่นก่อตั้ง|A|BT02-010|1|0|B|คน|||4||
+แม่ศรีนวล|A|BT02-011|4|3|B|สัตว์|||1||
+แม่ศรีนวล|A|BT02-011|4|3|B|สัตว์|||1|SCR|
+แมลงปอแจ็ค|A|BT02-012|3|2|B|แมลง|||3||
+แมลงปอ เปื้อนรังสี|A|BT02-013|0|1|B|แมลง|||2||
+ซันนี่|A|BT02-014|2|2|B|คน|||4||
+ซันนี่|A|BT02-014|2|2|B|คน|||4|SCR|
+เอเลี่ยนแสงสีฟ้า|A|BT02-015|3|2|B|เอเลี่ยน|||1||
+ฤษี โคบุตร|A|BT02-016|4|3|B|ฤษี|||2||
+ฤษี โคบุตร|A|BT02-016|4|3|B|ฤษี|||2|SCR|
+แรงงานทาสออฟฟิศ|A|BT02-017|1|4|P|คน|||3||
+ธอร์ เทพเจ้าสายฟ้า แห่ง แอสการ์ด|A|BT02-018|4|4|P|เทพ|||2||
+ธอร์ เทพเจ้าสายฟ้า แห่ง แอสการ์ด|A|BT02-018|4|4|P|เทพ|||2|SCR|
+โอดิน พ่อทุกสถาบัน แห่ง แอสการ์ด|A|BT02-019|5|4|P|เทพ||1|4||
+โอดิน พ่อทุกสถาบัน แห่ง แอสการ์ด|A|BT02-019|5|4|P|เทพ||1|4|SCR|
+นินจินแมน|A|BT02-020|6|4|P|คน|||2||
+กัปตัน ไกร|A|BT02-021|4|1|P|คน|||2||
+แบงค์ ผู้รู้ความจริง|A|BT02-022|2|2|P|คน|||1||
+40ดีกรีแมน|A|BT02-023|4|6|G|คน||D|1||
+40ดีกรีแมน|A|BT02-023|4|6|G|คน||D|1|SCR|
+เสามงคล|A|BT02-024|5|3|G|ต้นไม้|||2||
+ซินแส|A|BT02-025|3|3|G|คน|||3||
+ซินแส|A|BT02-025|3|3|G|คน|||3|SCR|
+ชุ่ย โจรสุสาน|A|BT02-026|5|3|G|คน|||2||
+พยาบาล เอ๋|A|BT02-027|6|5|G|คน|||1||
+สตีฟ Tank Ranger|A|BT02-028|3|1|G|คน|||3||
+รถถัง B66 - เอ็กซ์เซลเซอร์|A|BT02-029|4|5|G|หุ่นยนต์|||1||
+รถถัง B66 - เอ็กซ์เซลเซอร์|A|BT02-029|4|5|G|หุ่นยนต์|||1|SCR|
+ป้าข้างบ้าน|A|BT02-030|0|1|R|คน|||1||
+ตู้เย็นเบอร์ 1|A|BT02-031|4|3|R|หุ่นยนต์|||2||
+แมลงปอ|A|BT02-032|0|0|B|แมลง|||3||
+ผู้เจริญระดับ 4|A|BT02-033|5|5|B|คน|||0||
+ผีทีวี|A|BT02-034|2|3|P|ผี|||2||
+พุ่มไม้กินคน|A|BT02-035|2|2|G|ต้นไม้|||1||
+ต้นมะม่วง|A|BT02-036|4|2|G|ต้นไม้|||2||
+มาวิน|A|BT02-037|4|4|G|คน|||1||
+หมาฟู|A|BT02-038|2|1|G|สัตว์|||2||
+วานร ละโว้|A|BT02-039|3|2|G|สัตว์|||2||
+โลทัน|A|BT02-040|2|3|G|ยักษ์|||2||
+ช่วยโลกใบนี้ไว้|M|BT02-041|1|||เปรต|N||||
+ประชามติ|M|BT02-042|0|||ทหาร|N||||
+ฉุบสั่งตาย|M|BT02-043|1|||จอมเวทย์|N||||
+ด่านลอย|M|BT02-044|0|||จอมเวทย์|N||||
+ความกล้าหาญ|M|BT02-045|4|||จอมเวทย์|N||||
+ร้อนมากก็เปิดหน้าต่างสิว๊ากกกก|M|BT02-046|2|||จอมเวทย์|N||||
+แมลงปอทอด|M|BT02-047|1|||แมลง|N||||
+แมลงปอทอด|M|BT02-047|1|||แมลง|N|||SCR|
+กระแสอัปมงคล|M|BT02-048|1|||จอมเวทย์|N||||
+กระแสสิริมงคล|M|BT02-049|1|||จอมเวทย์|R||||
+เคี้ยวเพื่อนเธอซะ|M|BT02-050|3|||สัตว์|R||||
+ถวาย|M|BT02-051|0|||ฤษี|R||||
+เอากล้วยมานี่ย์ !!!!!!|M|BT02-052|3|||จอมเวทย์|R||||
+ฟ้องครู|M|BT02-053|0|||จอมเวทย์|R||||
+ไปเลยมอนตี้|M|BT02-054|1|||สัตว์|R||||
+ไปเลยมอนตี้|M|BT02-054|1|||สัตว์|R|||SCR|
+ประกันชั้นต่ำ|M|BT02-055|2|||จอมเวทย์|M||||
+ขวานเงิน|M|BT02-056|2|||คน|M||||
+ช็อตกัน นัยนาวุธ|M|BT02-057|1|||นรก|M|1|||
+ช็อตกัน นัยนาวุธ|M|BT02-057|1|||นรก|M|1||SCR|
+ประตูนรก|M|BT02-058|1|||นรก|L||||
+เทศกาลแมลงปอบุก|M|BT02-059|2|||แมลง|L||||
+แอสการ์ดคือสถานที่ไม่ใช่ผู้คน|M|BT02-060|4|||เทพ|L||||
+แอสการ์ดคือสถานที่ไม่ใช่ผู้คน|M|BT02-060|4|||เทพ|L|||SCR|
+พระลักษมี|A|BT03-001|1|1|R|เทพ|||4||
+นางอัปสร|A|BT03-002|4|3|R|เทพ|||1||
+อินทรีย์แมน|A|BT03-003|3|3|R|คน||1|1||
+หุ่นนักรบผู้กล้า : ไมเกรน|A|BT03-004|5|4|R|หุ่นยนต์|||2||
+หุ่นนักรบผู้กล้า : ไมเกรน|A|BT03-004|5|4|R|หุ่นยนต์|||2|SCR|
+โดรนสอดแนมผู้กล้า : เก๊าท์|A|BT03-005|4|4|R|หุ่นยนต์|||1||
+ยานเกราะผู้กล้า : ไดบาเรีย|A|BT03-006|0|0|R|หุ่นยนต์|||4||
+อากาศยานผู้กล้า : แอร์ซิด รีฟลักซ์|A|BT03-007|1|1|R|หุ่นยนต์|||2||
+กาฬสินธุ์แมน|A|BT03-008|4|3|R|คน|||3||
+กาฬสินธุ์แมน|A|BT03-008|4|3|R|คน|||3|SCR|
+จีสัส|A|BT03-009|4|5|R|สัตว์||D|2||
+จีสัส|A|BT03-009|4|5|R|สัตว์||D|2|SCR|
+ไดโนกาฬสินธุ์ - ภูเวียงสิรินเน|A|BT03-010|4|4|B|กะปอม|||2||
+ไดโนกาฬสินธุ์ - กินรีมิมัส|A|BT03-011|3|3|B|กะปอม|||2||
+ไดโนกาฬสินธุ์ - กินรีมิมัส|A|BT03-011|3|3|B|กะปอม|||2|SCR|
+ไดโนกาฬสินธุ์ - อิสานโนซอรัส|A|BT03-012|1|1|B|กะปอม|||4||
+ไดโนกาฬสินธุ์ - สัตยาซอรัส|A|BT03-013|1|1|B|กะปอม|||2||
+โอตะปุส|A|BT03-014|1|1|B|ปลา|||2||
+ตุ๊กตารัททาทุย|A|BT03-015|1|0|B|รัททาทุย|||3||
+รัททาทุยแม่วัว|A|BT03-016|1|0|B|รัททาทุย|||2||
+มนุษย์รัททาทุย|A|BT03-017|4|1|B|รัททาทุย|||1||
+จ่างู อสรพิษพิฆาตจักรกล|A|BT03-018|4|3|B|คน|||1||
+จ่างู อสรพิษพิฆาตจักรกล|A|BT03-018|4|3|B|คน|||1|SCR|
+ด็อคเตอร์แบงค์|A|BT03-019|2|1|P|คน|||2||
+แดรกคูลา|A|BT03-020|6|4|P|ผี||1|2||
+แดรกคูลา|A|BT03-020|6|4|P|ผี||1|2|SCR|
+อีแป๋ม ผีกระสือ RGB|A|BT03-021|2|0|P|ผี|||0||
+แม่นาค พระประแดง|A|BT03-022|3|2|P|ผี|||1||
+โลกิ เทพแอสการ์ดแห่งการหลอกลวง|A|BT03-023|3|2|P|เทพ|||2||
+โลกิ เทพแอสการ์ดแห่งการหลอกลวง|A|BT03-023|3|2|P|เทพ|||2|SCR|
+บัลเดอร์ เทพแสง แห่งแอสการ์ด|A|BT03-024|4|4|P|เทพ|||1||
+ฮามดัล เทพผู้รู้เห็น แห่งแอสการ์ด|A|BT03-025|4|5|P|เทพ|||0||
+ฮามดัล เทพผู้รู้เห็น แห่งแอสการ์ด|A|BT03-025|4|5|P|เทพ|||0|SCR|
+แบมบูจัง ไอดอลสองขั้ว|A|BT03-026|4|2|P|คน|||2||
+แมลงปอมีพิษ|A|BT03-027|3|1|P|แมลง|||3||
+ราชาอาณาจักรของแพง  พระเจ้านิโคไล|A|BT03-028|4|3|G|คน|||3||
+ราชาอาณาจักรของแพง  พระเจ้านิโคไล|A|BT03-028|4|3|G|คน|||3|SCR|
+ราชาอาณาจักรของแพง  พระเจ้านิโคไล|A|BT03-028|4|3|G|คน|||3|PR|
+ราชาอาณาจักรของแพง  พระเจ้านิโคไล|A|BT03-028|4|3|G|คน|||3|CBR|
+ทหารอาณาจักรของแพง|A|BT03-029|0|0|G|คน|||2||
+ช่างตัดเสื้อ อาณาจักรของแพง|A|BT03-030|2|1|G|คน|||2||
+จอมเวทย์ดอคู่|A|BT03-031|4|3|G|คน|||2||
+ตั๊กแตนพันธ์ุ X|A|BT03-032|5|3|G|เอเลี่ยน|||3||
+แมลงปอ บรรพบุรุษ|A|BT03-033|4|1|G|แมลง|||1||
+พาลี|A|BT03-034|7|4|G|สัตว์|||2||
+พาลี|A|BT03-034|7|4|G|สัตว์|||2|SCR|
+นางมณโฑ|A|BT03-035|4|3|G|คน|||2||
+นางมณโฑ|A|BT03-035|4|3|G|คน|||2|SCR|
+จอน ชาวดาวอังคาร|A|BT03-036|5|4|R|เอเลี่ยน|||3||
+แมลงปอนา|A|BT03-037|0|0|B|แมลง|||4||
+ตัวอ่อนรัททาทุย|A|BT03-038|0|0|B|รัททาทุย|||3||
+จอมเวทย์ดำ|A|BT03-039|3|4|P|คน|||1||
+มหิตัน|A|BT03-040|3|3|G|ยักษ์|||3||
+เก็บค่าคุ้มครอง|M|BT03-041|1|||จอมเวทย์|N||||
+ตู้โชว์ไอดอล|M|BT03-042|2|||จอมเวทย์|N||||
+ผมขอค้าน !!|M|BT03-043|1|||จอมเวทย์|N||||
+เยี่ยวรดศาล|M|BT03-044|2|||ผี|N||||
+เยี่ยวรดศาล|M|BT03-044|2|||ผี|N|||SCR|
+ซุปเปอร์สแน็ค !!|M|BT03-045|1|||สัตว์|N||||
+ซุปเปอร์สแน็ค !!|M|BT03-045|1|||สัตว์|N|||SCR|
+จมน้ำ|M|BT03-046|1|||แมลง|N||||
+ไม่เจ้ายังไม่พร้อม|M|BT03-047|2|||ฤษี|R||||
+เอาเสื้อมาหมุนๆแล้วตบ|M|BT03-048|1|||จอมเวทย์|R||||
+คว้าปืนมายิงหมี|M|BT03-049|2|||จอมเวทย์|R||||
+งับ|M|BT03-050|1|||กะปอม|R||||
+งับ|M|BT03-050|1|||กะปอม|R|||SCR|
+อาวุธหุ่นนักรบผู้กล้า "อีโบล่า ซอร์ด"|M|BT03-051|2|||หุ่นยนต์|M||||
+แผนการ : แกงส้มตะปูเสียบ|M|BT03-052|1|||จอมเวทย์|M||||
+ยาแก้ไอน้ำดำ|M|BT03-053|1|||จอมเวทย์|M||||
+ขวานไม้เน่าๆเหม็นๆ|M|BT03-054|2|||ต้นไม้|M||||
+ขวานทอง|M|BT03-055|2|||เทพ|M||||
+สายฟ้า วัชระ|M|BT03-056|4|||เทพ|M|1|||
+สายฟ้า วัชระ|M|BT03-056|4|||เทพ|M|1||SCR|
+อาณาจักรของแพง|M|BT03-057|4|||จอมเวทย์|L||||
+ยุคกาฬสินธุ์โซอิค|M|BT03-058|1|||ต้นไม้|L||||
+ราชธานีสามัคคี|M|BT03-059|2|||จอมเวทย์|L||||
+ปราสาทแดรก|M|BT03-060|2|||ผี|L||||
+จอมหักกระดูก|A|BT04-001|6|5|R|เอเลี่ยน|||2||
+จอมหักกระดูก|A|BT04-001|6|5|R|เอเลี่ยน|||2|SCR|
+ครูสงบ กล้ามโต|A|BT04-002|4|4|R|คน|||1||
+ไอ้นัท - คนใจเด็ด|A|BT04-003|1|3|R|คน|||2||
+อีช่า - สาวน้อยคนเก่ง|A|BT04-004|3|1|R|คน|||2||
+ยายกบ 1954|A|BT04-005|0|2|R|สัตว์|||1||
+แบงค์ทีสต้า นักมวยปล้ำ|A|BT04-006|2|3|R|คน|||1||
+ราม และ วิโรจน์|A|BT04-007|5|4|R|คน|||1||
+ราม และ วิโรจน์|A|BT04-007|5|4|R|คน|||1|SCR|
+ลูกคนรวย|A|BT04-008|2|0|R|คน|||4||
+โทมาโทจัง ไอดอลเด็กน้อย|A|BT04-009|2|1|R|คน|||2||
+ไดโนกาฬสินธุ์ - สยามโมไทรันนัส|A|BT04-010|6|6|B|กะปอม||1|3||
+ไดโนกาฬสินธุ์ - สยามโมไทรันนัส|A|BT04-010|6|6|B|กะปอม||1|3|SCR|
+เทอราโนดอน จากต่างแดน|A|BT04-011|3|2|B|กะปอม|||2||
+เอเลี่ยนทูตดาวอังคาร|A|BT04-012|3|2|B|เอเลี่ยน|||2||
+โอตะตัวกะปอม|A|BT04-013|0|0|B|กะปอม|||4||
+มาวิน เซียนเบ็ด|A|BT04-014|2|1|B|คน|||2||
+มาวิน เซียนเบ็ด|A|BT04-014|2|1|B|คน|||2|SCR|
+บึงทมิฬ  People - คุณดีไมส์ (ปลาดาบ)|A|BT04-015|6|4|B|ปลา|||2||
+ริกกี้ คุณตา|A|BT04-016|4|4|B|แมลง|||2||
+ริกกี้ คุณตา|A|BT04-016|4|4|B|แมลง|||2|SCR|
+หมานมเย็น|A|BT04-017|3|2|B|สัตว์|||1||
+รัททาทุย 2 หัว|A|BT04-018|3|2|B|รัททาทุย|||1||
+คนแก่สติเลอะเลือนผู้รู้ความจริง|A|BT04-019|6|5|P|คน||1|3||
+คนแก่สติเลอะเลือนผู้รู้ความจริง|A|BT04-019|6|5|P|คน||1|3|SCR|
+อู๊ด ประธานผู้รู้ความจริง|A|BT04-020|4|1|P|คน|||2||
+อู๊ด ประธานผู้รู้ความจริง|A|BT04-020|4|1|P|คน|||2|SCR|
+อู๊ด ประธานผู้รู้ความจริง|A|BT04-020|4|1|P|คน|||2|PR|
+อู๊ด ประธานผู้รู้ความจริง|A|BT04-020|4|1|P|คน|||2|CBR|
+น้องสาม ผู้รู้ความจริง|A|BT04-021|3|1|P|คน|||2||
+รปภ ผู้รู้ความจริง|A|BT04-022|2|2|P|คน|||2||
+วิไลวรรณ แม่แบงค์|A|BT04-023|0|0|P|คน|||4||
+นายนิรยบาล หมอ|A|BT04-024|4|2|P|นรก|||1||
+ครูแกง สอนเลข|A|BT04-025|4|2|P|คน|||2||
+ลูกเขยบิ๊ก|A|BT04-026|3|1|P|คน|||1||
+ลูกเขยบิ๊ก|A|BT04-026|3|1|P|คน|||1|SCR|
+ผู้งมงาย|A|BT04-027|2|1|P|คน|||1||
+พญายักษ์ ทศกัณฑ์|A|BT04-028|4|5|G|ยักษ์|||1||
+พญายักษ์ ทศกัณฑ์|A|BT04-028|4|5|G|ยักษ์|||1|SCR|
+เสามงคล ทรงโรมัน|A|BT04-029|5|3|G|ต้นไม้|||2||
+มาติเนซ Tank Ranger|A|BT04-030|3|1|G|คน|||2||
+มาติเนซ Tank Ranger|A|BT04-030|3|1|G|คน|||3|SCR|
+ทหารเวรคลังแสง|A|BT04-031|4|1|G|คน|||2||
+พลปืนอาณาจักรของแพง|A|BT04-032|3|1|G|คน|||2||
+เจ้าของร้านอาบน้ำสัตว์|A|BT04-033|4|2|G|คน|||3||
+อนงค์ พนักงานอาบน้ำสัตว์|A|BT04-034|1|0|G|คน|||3||
+แฟรงกี้ พนักงานอาบน้ำสัตว์|A|BT04-035|1|1|G|คน|||3||
+หนุ่มผมยาวนักวิ่ง|A|BT04-036|0|1|R|คน|||3||
+ผู้เจริญระดับ 3|A|BT04-037|3|3|B|คน|||1||
+นักดาบมือหนึ่ง|A|BT04-038|5|6|P|คน|||1||
+แมวมัทฉะ|A|BT04-039|1|3|G|สัตว์|||1||
+พัทธกาล|A|BT04-040|0|3|G|ยักษ์|||0||
+ล้มโต๊ะ|M|BT04-041|1|||จอมเวทย์|N||||
+Grand Rumble !!!!|M|BT04-042|3|||จอมเวทย์|N||||
+Grand Rumble !!!!|M|BT04-042|3|||จอมเวทย์|N|||SCR|
+แผนการ : ถอยรถชน|M|BT04-043|1|||จอมเวทย์|N||||
+บีมมมมมมมมมม|M|BT04-044|2|||เทพ|N||||
+ใครเจ๋งกว่า !|M|BT04-045|1|||ฤษี|N||||
+เลือกมันสำหรับพวก จน !!!|M|BT04-046|1|||จอมเวทย์|N||||
+ความจริงงงงงงง|M|BT04-047|1|||จอมเวทย์|N||||
+งานจับมือ|M|BT04-048|2|||จอมเวทย์|R||||
+งานจับมือ|M|BT04-048|2|||จอมเวทย์|R|||SCR|
+เอาไปอยู่ด้วย|M|BT04-049|2|||ผี|R||||
+เชาว์ปัญญาลิง - ชิงปัญญาเรา|M|BT04-050|0|||สัตว์|R||||
+เชาว์ปัญญาลิง - ชิงปัญญาเรา|M|BT04-050|0|||สัตว์|R|||SCR|
+ลดราคาล้นตลาด|M|BT04-051|0|||สัตว์|R||||
+กลับหลังหัน !!!|M|BT04-052|2|||ทหาร|R||||
+อาวุธหุ่นนักรบผู้กล้า " ไบโพล่า ชิลด์ "|M|BT04-053|1|||จอมเวทย์|M||||
+ของขวัญจากโอตะ|M|BT04-054|4|||จอมเวทย์|M||||
+ดาบพิฆาตสวรรค์ ราคา 4000 เหรียญทอง|M|BT04-055|2|||จอมเวทย์|M||||
+ปืนเล็กยาว|M|BT04-056|2|||ทหาร|M||||
+สมาคมผู้รู้ความจริง|M|BT04-057|2|||จอมเวทย์|L||||
+โรงบาลรัฐ|M|BT04-058|2|||ต้นไม้|L||||
+พิภพรัททาทุย|M|BT04-059|3|||รัททาทุย|L||||
+พิภพรัททาทุย|M|BT04-059|3|||รัททาทุย|L|||SCR|
+Podcast Untitled Case|M|BT04-060|1|||หุ่นยนต์|L||||
+Podcast Untitled Case|M|BT04-060|1|||หุ่นยนต์|L|||SCR|
+กุ่ย นักเอาตัวรอด|A|BT05-001|3|2|R|คน|||2||
+กุ่ย นักเอาตัวรอด|A|BT05-001|3|2|R|คน|||2|SCR|
+แมลงปอนางพญา|A|BT05-002|10|5|R|แมลง||1|2||
+แมลงปอนางพญา|A|BT05-002|10|5|R|แมลง||1|2|SCR|
+เบดิเวียร์ อัศวินโต๊ะกลมแห่งความภักดี|A|BT05-003|3|3|R|ต่างชาติ|||2||
+ทริสทัน อัศวินโต๊ะกลมแห่งความแม่นยำ|A|BT05-004|2|1|R|ต่างชาติ|||4||
+เทพารักษ์งมขวาน|A|BT05-005|3|2|R|เทพ|||1||
+หมาแพนดี้|A|BT05-006|2|2|R|สัตว์|||2||
+สหายหุ่นผู้กล้า โฟเบีย|A|BT05-007|3|0|R|ต่างชาติ|||2||
+โจอี้ นักบอลขาหัก|A|BT05-008|0|0|R|ต่างชาติ|||4||
+น้องส้ม ชู้วันชัย|A|BT05-009|1|1|R|คน|||4||
+น้องนาว ชู้วันชัย|A|BT05-010|2|2|R|คน|||2||
+ฤๅษี ภฤคุ|A|BT05-011|4|4|R|ฤษี|||1||
+ฤๅษี ภฤคุ|A|BT05-011|4|4|R|ฤษี|||1|SCR|
+ฤๅษี ภฤคุ|A|BT05-011|4|4|R|ฤษี|||1|PR|
+ฤๅษี ภฤคุ|A|BT05-011|4|4|R|ฤษี|||1|CBR|
+เจนนี่ อย่าบู้บี้เลขา|A|BT05-012|3|3|R|คน||D|2||
+ผู้เจริญ นาย|A|BT05-013|3|0|B|คน|||4||
+ผู้เจริญ นาย|A|BT05-013|3|0|B|คน|||4|SCR|
+ลานเซลอต อัศวินโต๊ะกลมแห่งการปฏิวัติ|A|BT05-014|4|4|B|ต่างชาติ|||1||
+ลานเซลอต อัศวินโต๊ะกลมแห่งการปฏิวัติ|A|BT05-014|4|4|B|ต่างชาติ|||1|SCR|
+กาเวน อัศวินโต๊ะกลมแห่งแสงอาทิตย์|A|BT05-015|5|4|B|ต่างชาติ|||3||
+โคลัมบัส นักท่องเรือ|A|BT05-016|2|4|B|ต่างชาติ|||1||
+เจค นักฆ่ามือเก๋า|A|BT05-017|4|6|B|ต่างชาติ|||1||
+เจค นักฆ่ามือเก๋า|A|BT05-017|4|6|B|ต่างชาติ|||1|SCR|
+ของขวัญที่เมียทิ้งไว้ให้|A|BT05-018|2|1|B|สัตว์|||0||
+บอสทุเรียน|A|BT05-019|0|0|B|ต้นไม้|||4||
+บึงทมิฬ  People - คุณเงือกมาวิน|A|BT05-020|5|4|B|ปลา|||3||
+นีโม่ นรกสเลเยอร์|A|BT05-021|3|3|B|คน|||2||
+นีโม่ นรกสเลเยอร์|A|BT05-021|3|3|B|คน|||2|SCR|
+แมว-น้ำมะลิ|A|BT05-022|2|2|B|สัตว์|||1||
+นักรบ ฮอล|A|BT05-023|3|3|P|คน|||0||
+นักรบ ฮอล|A|BT05-023|3|3|P|คน|||0|SCR|
+มีมมิ ผู้ร่วงหล่น|A|BT05-024|4|2|P|ผี|||2||
+เฟรย่า แม่ทุกสถาบันแอสการ์ด|A|BT05-025|4|3|P|เทพ|||3||
+เฮล่า เทพแอสการ์ดแห่งความตาย|A|BT05-026|5|2|P|เทพ|||2||
+เฮล่า เทพแอสการ์ดแห่งความตาย|A|BT05-026|5|2|P|เทพ|||2|SCR|
+บรุนฮิลด์  เทพธิดาแห่งวัลฮัลลา|A|BT05-027|3|2|P|เทพ|||2||
+Ecycle|A|BT05-028|2|2|P|หุ่นยนต์|||3||
+จาบับวา|A|BT05-029|4|4|P|ต่างชาติ|||0||
+หมาชาไทย|A|BT05-030|2|0|P|สัตว์|||3||
+ทัตดนัยซัง โปรดิวเซอร์มือทอง|A|BT05-031|6|3|P|คน||1|2||
+เจ๊หมวย เจ้าของร้านหม่าล่า|A|BT05-032|1|2|P|ต่างชาติ|||1||
+ลุงไนท์ ราชาวานร|A|BT05-033|5|4|G|สัตว์||D|2||
+ลุงไนท์ ราชาวานร|A|BT05-033|5|4|G|สัตว์||D|2|SCR|
+วานรช่องแชท|A|BT05-034|2|2|G|สัตว์||D|2||
+คุณเชิดชัย Super Air|A|BT05-035|2|2|G|คน|||1||
+กระเป๋าเครื่องบิน Super Air|A|BT05-036|1|1|G|คน|||2||
+หมาเครื่องบิน Super Air|A|BT05-037|2|2|G|สัตว์|||0||
+ผู้โดยสาร Super Air|A|BT05-038|0|0|G|คน|||2||
+กุมภกรรณ ทดน้ำ|A|BT05-039|6|3|G|ยักษ์|||2||
+วานรแบงค์|A|BT05-040|2|3|G|สัตว์|||1||
+จ่ายุทธ Tank Ranger|A|BT05-041|3|1|G|คน|||3||
+วีรชนชีวภาพ|A|BT05-042|0|0|G|คน|||4||
+มยุราซัง  ไอดอลยุค 80|A|BT05-043|2|1|G|คน|||2||
+มยุราซัง  ไอดอลยุค 80|A|BT05-043|2|1|G|คน|||2|SCR|
+อาจารย์หลี ปรมาจารย์มวยจีน|A|BT05-044|3|3|G|ต่างชาติ|||0||
+นินจาไร้นาม|A|BT05-045|0|2|R|ต่างชาติ|||2||
+ง่อวซอรัส|A|BT05-046|5|5|B|กะปอม|||3||
+แมลงปอปีกเหล็ก|A|BT05-047|1|4|P|แมลง|||0||
+รถถัง A003|A|BT05-048|0|3|G|หุ่นยนต์|||0||
+รับซื้อของโจร|M|BT05-049|0|||จอมเวทย์|N||||
+พูดไทยได้ 5 คำ|M|BT05-050|1|||ต่างชาติ|N||||
+ง่วงมากก็ไปนอน !!!|M|BT05-051|2|||จอมเวทย์|N||||
+Jump Scare|M|BT05-052|1|||จอมเวทย์|N||||
+บ่อนแตก|M|BT05-053|2|||จอมเวทย์|N||||
+เครื่องบิน Super Air|M|BT05-054|2|||หุ่นยนต์|N||||
+เครื่องบิน Super Air|M|BT05-054|2|||หุ่นยนต์|N|||SCR|
+ตั๋วยืน|M|BT05-055|3|||จอมเวทย์|N||||
+พลังแห่งการตีพ่อตีแม่|M|BT05-056|2|||เปรต|N||||
+พลังแห่งการตีพ่อตีแม่|M|BT05-056|2|||เปรต|N|||SCR|
+พระคุ้มครอง|M|BT05-057|1|||จอมเวทย์|R||||
+อย่าให้มีครั้งที่ 2|M|BT05-058|1|||จอมเวทย์|R||||
+รหัสดำ|M|BT05-059|4|||หุ่นยนต์|R|1|||
+เหน็บกินมือ|M|BT05-060|1|||จอมเวทย์|R||||
+แผนการ : เพดานถล่ม|M|BT05-061|1|||จอมเวทย์|R||||
+ฮึบบบบบบบบบบบบ|M|BT05-062|3|||จอมเวทย์|R||||
+อาวุธหุ่นนักรบผู้กล้า "GHD โคลค"|M|BT05-063|2|||หุ่นยนต์|M||||
+ดาบศักดิ์สิทธิ์ อาลอนไดร์ท|M|BT05-064|3|||จอมเวทย์|M||||
+กระบองแสง คทาวุธ|M|BT05-065|0|||ยักษ์|M|1|||
+กระบองแสง คทาวุธ|M|BT05-065|0|||ยักษ์|M|1||SCR|
+มนุษย์ดัดแปลง|M|BT05-066|2|||หุ่นยนต์|M||||
+Hot Zone|M|BT05-067|1|||ทหาร|L||||
+Hot Zone|M|BT05-067|1|||ทหาร|L|||SCR|
+ทรายดูด|M|BT05-068|2|||จอมเวทย์|L||||
+กรุงลงกา|M|BT05-069|1|||ยักษ์|L||||
+ฐานหุ่นนักรบผู้กล้า ซีทันยาน|M|BT05-070|2|||หุ่นยนต์|L||||
+ไม่นะ อู๊ด !|L|BT05-071|||||||||
+ไม่นะ ไมเกรน !|L|BT05-072|||||||||
+ไม่นะ มีมมิจัง !|L|BT05-073|||||||||
+เฮ้ย รัททาทุย ตาย !|L|BT05-074|||||||||
+ไม่นะ โดม !|L|BT05-075|||||||||
+วิรูฬ นาคเกล็ดทอง|A|BT06-001|3|4|R|สัตว์วิเศษ|||0||
+ฉัพพยา นาคเกล็ดรุ้ง|A|BT06-002|3|3|R|สัตว์วิเศษ|||2||
+เอรา นาคเกล็ดเขียว|A|BT06-003|2|1|R|สัตว์วิเศษ|||3||
+อนันต์ ราชาแห่งนาค|A|BT06-004|6|7|R|สัตว์วิเศษ||1|2||
+อนันต์ ราชาแห่งนาค|A|BT06-004|6|7|R|สัตว์วิเศษ||1|2|SCR|
+รีวิวแมน|A|BT06-005|3|2|R|คน||D|2||
+รีวิวแมน|A|BT06-005|3|2|R|คน||D|2|SCR|
+อาเธอร์ ราชาแห่งอัศวินโต๊ะกลม|A|BT06-006|7|5|R|ต่างชาติ|||2||
+อาเธอร์ ราชาแห่งอัศวินโต๊ะกลม|A|BT06-006|7|5|R|ต่างชาติ|||2|SCR|
+เคย์ อัศวินโต๊ะกลมแห่งความหลักแหลม|A|BT06-007|3|2|R|ต่างชาติ|||3||
+ยอดนักบุญ|A|BT06-008|3|0|R|คน|||0||
+หุ่นนักรบผู้กล้า : โปรโตไมเกรน|A|BT06-009|4|3|R|หุ่นยนต์|||2||
+พระอิศวรปลอม|A|BT06-010|3|1|R|คน|||1||
+ไดโนกาฬสินธุ์ - สุธีธรนีซอรัส|A|BT06-011|3|4|B|กะปอม|||0||
+กัปตัน 7 สี|A|BT06-012|4|3|B|ต่างชาติ|||2||
+บึงทมิฬ  People  - คุณบลูลอบสเตอร์|A|BT06-013|4|0|B|ปลา|||2||
+สวีนนีย์ มนุษย์ดาว R18|A|BT06-014|4|5|B|เอเลี่ยน|||0||
+สวีนนีย์ มนุษย์ดาว R18|A|BT06-014|4|5|B|เอเลี่ยน|||0|SCR|
+อามัส มนุษย์ดาว R18|A|BT06-015|3|0|B|เอเลี่ยน|||3||
+จอย มนุษย์ดาว R18|A|BT06-016|4|2|B|เอเลี่ยน|||2||
+วิลโล่ ปลาแกะ|A|BT06-017|2|2|B|ปลา|||2||
+จ่ามะนาวแขนเหล็ก|A|BT06-018|4|5|B|คน|||1||
+จ่ามะนาวแขนเหล็ก|A|BT06-018|4|5|B|คน|||1|SCR|
+ผู้เจริญระดับสูงสุด|A|BT06-019|4|2|B|คน|||3||
+บอล ผู้รักวิตามิน|A|BT06-020|2|1|B|คน|||2||
+ฮิฟีสตัส เทพโอลิมปัสแห่งการช่าง|A|BT06-021|0|0|B|เทพ|||1||
+แบงค์ผู้พิชิต|A|BT06-022|7|6|P|คน||1|3||
+แบงค์ผู้พิชิต|A|BT06-022|7|6|P|คน||1|3|SCR|
+แบงค์ผู้พิชิต|A|BT06-022|7|6|P|คน||1|3|PR|
+แบงค์ผู้พิชิต|A|BT06-022|7|6|P|คน||1|3|CBR|
+อู๊ด คุณแม่|A|BT06-023|4|2|P|คน|||2||
+พี่หน่วง|A|BT06-024|4|1|P|คน|||2||
+เลอติ๊ก เด็กไม่ชอบแดรคคูลา|A|BT06-025|3|3|P|ต่างชาติ|||1||
+แอชวิคกับอโศกาบาร์พิศวง|A|BT06-026|7|3|P|ผี|||1||
+แอชวิคกับอโศกาบาร์พิศวง|A|BT06-026|7|3|P|ผี|||1|SCR|
+สกัลด์ เทพธิดาแห่งวัลฮัลลา|A|BT06-027|2|2|P|เทพ|||2||
+โอลรุน เทพธิดาแห่งวัลฮัลลา|A|BT06-028|3|3|P|เทพ|||2||
+ซีกรุน เทพธิดาแห่งวัลฮัลลา|A|BT06-029|5|5|P|เทพ|||2||
+อาม่อน No.7|A|BT06-030|7|7|P|นรก||1|0||
+อาม่อน No.7|A|BT06-030|7|7|P|นรก||1|0|SCR|
+งี่เง่า และ งอแง|A|BT06-031|2|1|P|สัตว์|||0||
+พีเจี้ยน 3000|A|BT06-032|0|0|G|สัตว์|||4||
+เสาซินแสมงคล|A|BT06-033|7|5|G|ต้นไม้||1|4||
+เสาซินแสมงคล|A|BT06-033|7|5|G|ต้นไม้||1|4|SCR|
+เสามงคล ทรงญี่ปุ่น|A|BT06-034|4|3|G|ต้นไม้|||2||
+จ่านุ้ย ทหารช่าง|A|BT06-035|3|2|G|คน|||2||
+เสนาธิการ อาณาจักรของแพง|A|BT06-036|3|2|G|สัตว์|||2||
+สว นาโนแมชชีน|A|BT06-037|8|8|G|หุ่นยนต์||1|1||
+สว นาโนแมชชีน|A|BT06-037|8|8|G|หุ่นยนต์||1|1|SCR|
+แมมมอธแช่แข็ง|A|BT06-038|5|7|G|สัตว์|||1||
+เรนะ นักล่าไดโนเสาร์|A|BT06-039|3|3|G|ต่างชาติ|||2||
+เรนะ นักล่าไดโนเสาร์|A|BT06-039|3|3|G|ต่างชาติ|||2|SCR|
+แมวเก็นไมฉะ|A|BT06-040|4|3|G|สัตว์|||2||
+น้องมี่ 3.0|A|BT06-041|1|4|R|หุ่นยนต์|||0||
+พ่อหนุ่มเทสดี|A|BT06-042|0|1|B|คน|||3||
+พลเอกปั๊ดโธ่|A|BT06-043|4|2|G|คน|||0||
+พลเอกปักเป้า|A|BT06-044|3|1|G|คน|||0||
+งานวิจัยของพระพรหม|M|BT06-045|0|||เทพ|N||||
+คำสั่งของพระอิศวร|M|BT06-046|1|||เทพ|N||||
+จิตมุ่งมั่นของพระนารายณ์|M|BT06-047|2|||เทพ|N||||
+เฮือกสุดท้าย|M|BT06-048|2|||จอมเวทย์|N||||
+แผนลับของเหล่าพลเอก|M|BT06-049|4|||ทหาร|N||||
+ช่างมาแล้วววว|M|BT06-050|3|||จอมเวทย์|R||||
+ธาตุไฟแตก ๆ|M|BT06-051|1|||เทพ|R||||
+เสียงเรียกแห่งวัลฮัลลา|M|BT06-052|2|||เทพ|R||||
+พลังแฝง|M|BT06-053|2|||จอมเวทย์|R||||
+ลูกแก้วนาคา|M|BT06-054|3|||จอมเวทย์|M||||
+ไสยเวท ย้อนกลับ|M|BT06-055|2|||จอมเวทย์|M||||
+ไสยเวท ย้อนกลับ|M|BT06-055|2|||จอมเวทย์|N|||SCR|
+เท่ระเบิด !!!!|M|BT06-056|2|||ทหาร|M||||
+กองถ่ายฤาษี|M|BT06-057|2|||ฤษี|M||||
+ดาบศักดิ์สิทธิ์ แกลลาติน|M|BT06-058|2|||จอมเวทย์|M||||
+นรกในกรง|M|BT06-059|2|||จอมเวทย์|L||||
+คาเฟ่หมาแมว|M|BT06-060|3|||สัตว์|L||||
+คาเฟ่หมาแมว|M|BT06-060|3|||สัตว์|L|||SCR|
+สภาแบงค์|M|BT06-061|1|||จอมเวทย์|L||||
+สภาแบงค์|M|BT06-061|1|||จอมเวทย์|L|||SCR|
+ถ้ำนาคา|M|BT06-062|1|||จอมเวทย์|L||||
+ประตูวัลฮัลลา|M|BT06-063|2|||เทพ|L||||
+เวทีเพื่อชีวิต|C|BT06-064|3|3|R|สิ่งก่อสร้าง|||2||
+รูปปั้นพระอิศวร|C|BT06-065|5|4|R|เทพ|||1||
+ยานสำรวจ R18|C|BT06-066|4|4|B|หุ่นยนต์|||2||
+กองไฟลูกเสือ|C|BT06-067|4|3|B|สิ่งก่อสร้าง|||2||
+ป้อมยาม|C|BT06-068|4|3|P|สิ่งก่อสร้าง|||1||
+หุบเขา 3 พลเอก|C|BT06-069|3|4|G|ทหาร|||2||
+ตู้วารีบำบัด|C|BT06-070|5|1|G|สิ่งก่อสร้าง|||1||
+ตู้วารีบำบัด|C|BT06-070|5|1|G|สิ่งก่อสร้าง|||1|SCR|
+วันชัยเปรตรุ่นพ่อ|A|BT07-001|4|1|R|เปรต|||0||
+วันชัยเปรตรุ่นพ่อ|A|BT07-001|4|1|R|เปรต|||0|SCR|
+พระแม่อุมาเทวี|A|BT07-002|4|2|R|เทพ|||2||
+พระแม่อุมาเทวี|A|BT07-002|4|2|R|เทพ|||2|SCR|
+เจ้าแม่กาลี|A|BT07-003|8|7|R|เทพ|||1||
+เจ้าแม่กาลี|A|BT07-003|8|7|R|เทพ|||1|SCR|
+พรีวิวบอย|A|BT07-004|4|0|R|คน||D|2||
+ฤๅษีพระเจ้าตา|A|BT07-005|2|2|R|ฤษี|||0||
+อนันตวดี ราชินีแห่งนาค|A|BT07-006|1|1|R|สัตว์วิเศษ|||4||
+สัตว์ทดลอง #1|A|BT07-007|0|0|R|สัตว์วิเศษ|||0||
+ตำรวจไซบอร์ค จ่านิ่ง|A|BT07-008|2|2|R|หุ่นยนต์|||3||
+เจมี่ ขยะสังคม|A|BT07-009|2|3|R|คน|||2||
+น้องไอซ์ จี่สมอง|A|BT07-010|4|2|R|คน|||2||
+ไอ้แม๊ก ขยะสังคม|A|BT07-011|2|2|B|คน|||0||
+ครุฑสุบรรณ เจ้าเวหา|A|BT07-012|6|5|B|สัตว์วิเศษ||1|4||
+ครุฑสุบรรณ เจ้าเวหา|A|BT07-012|6|5|B|สัตว์วิเศษ||1|4|SCR|
+ครุฑเวนไตย เจ้ากำลัง|A|BT07-013|3|3|B|สัตว์วิเศษ|||2||
+ครุฑวัสสวัส เจ้าโลก|A|BT07-014|5|5|B|สัตว์วิเศษ|||2||
+ครุฑวัสสวัส เจ้าโลก|A|BT07-014|5|5|B|สัตว์วิเศษ|||2|SCR|
+ครุฑสัจจะ เจ้าแห่งแสง|A|BT07-015|4|2|B|สัตว์วิเศษ|||3||
+ครุฑปรเมศวร เจ้าสมบัติ|A|BT07-016|3|2|B|สัตว์วิเศษ|||3||
+บึงทมิฬ  People - คุณตะพาบ|A|BT07-017|4|4|B|ปลา|||2||
+ราชาหิมะ บิง|A|BT07-018|10|6|B|ต่างชาติ|||2||
+ราชินีหิมะ ชีหลิน|A|BT07-019|4|2|B|ต่างชาติ|||2||
+ราชินีหิมะ ชีหลิน|A|BT07-019|4|2|B|ต่างชาติ|||2|SCR|
+พลทหารหิมะ|A|BT07-020|2|2|B|ต่างชาติ|||2||12
+อัศวินแบงค์|A|BT07-021|6|6|B|ต่างชาติ|||3||
+ชาช่าจัง ไอดอลคนเก่ง|A|BT07-022|4|6|B|คน|||2||
+พี่หน่วง พิธีกรผมสวย|A|BT07-023|4|4|P|คน|||2||
+พี่หน่วง พิธีกรผมสวย|A|BT07-023|4|4|P|คน|||2|SCR|
+พี่หน่วง พิธีกรผมสวย|A|BT07-023|4|4|P|คน|||2|PR|
+พี่หน่วง พิธีกรผมสวย|A|BT07-023|4|4|P|คน|||2|CBR|
+คุณเก่งพลังช้าง|A|BT07-024|5|4|P|คน|||3||
+ทนายเตะปาก|A|BT07-025|3|1|P|คน|||4||
+ทนายกิ๊บ|A|BT07-026|2|2|P|คน|||3||
+พี่วัฒน์ BGN|A|BT07-027|5|2|P|คน|||2||
+พี่วัฒน์ BGN|A|BT07-027|5|2|P|คน||D|2|SCR|
+ไอ้ดำ จากนรก|A|BT07-028|5|4|P|นรก|||2||
+จอมเวทย์ กาลู|A|BT07-029|3|2|P|ต่างชาติ|||3||
+จอมเวทย์ กาลู|A|BT07-029|3|2|P|ต่างชาติ|||3|SCR|
+จอมเวทย์ อะปัด|A|BT07-030|4|3|P|คน|||1||
+จอมเวทย์ เบล่า|A|BT07-031|3|2|P|ต่างชาติ|||2||
+จอมเวทย์ เบล่า|A|BT07-031|3|2|P|ต่างชาติ|||2|SCR|
+อาวุธชีวภาพ เอ็มตัวเต็ง|A|BT07-032|6|0|P|คน||1|3||
+เดซี่ แห่งสายรุ้ง|A|BT07-033|2|2|P|สัตว์วิเศษ|||2||
+เดซี่ แห่งสายรุ้ง|A|BT07-033|2|2|P|สัตว์วิเศษ|||2|SCR|
+ตำรวจนอกเครื่องแบบ ไซเฮย์|A|BT07-034|3|3|G|คน|||2||
+ตำรวจนอกเครื่องแบบ ไซเฮย์|A|BT07-034|3|3|G|คน|||2|SCR|
+ตำรวจไฟแรง เอนโว่|A|BT07-035|5|4|G|คน|||1||
+ตั๊กแตนหยิน|A|BT07-036|5|4|G|แมลง|||0||
+ตั๊กแตนหยิน|A|BT07-036|5|4|G|แมลง|||0|SCR|
+ตั๊กแตนหยาง|A|BT07-037|4|3|G|แมลง|||1||
+ตั๊กแตนหยาง|A|BT07-037|4|3|G|แมลง|||1|SCR|
+วาฬทมิฬ ก้า|A|BT07-038|2|2|G|ปลา|||3||
+ตั๊กแตนหญิง|A|BT07-039|3|2|G|แมลง|||1||
+ตั๊กแตนหญิง|A|BT07-039|3|2|G|แมลง|||1|SCR|
+หมอเลิฟ ฟันเหยิน|A|BT07-040|4|3|G|คน||1|4||
+คาบู ช่วยด้วย|A|BT07-041|5|1|G|คน|||3||
+บัวนิด วานรแห่งสวนสัตว์|A|BT07-042|3|5|G|สัตว์|||2||
+แมรี่ พนักงานต้อนรับ|A|BT07-043|4|2|G|ต่างชาติ|||0||
+หุ่นสนับสนุนผู้กล้า Dเพรส|A|BT07-044|2|4|R|หุ่นยนต์|||1||
+ข้ารับใช้มนุษย์ดาว R18|A|BT07-045|1|1|B|เอเลี่ยน|||4||
+ผีเสื้อของเดซี่|A|BT07-046|3|2||สัตว์วิเศษ|||1||
+เจ้าของร้านปลาทูน่า|A|BT07-047|0|1|G|คน|||3||
+หยุด!! นี่ตำรวจ|M|BT07-048|0|||จอมเวทย์|N||||
+เพ้อเจ้อ|M|BT07-049|1|||จอมเวทย์|N||||
+ราคาชาติที่คุณขาย|M|BT07-050|2|||จอมเวทย์|N||||
+คาถา ปลดอาวุสสิวะ|M|BT07-051|3|||จอมเวทย์|N||||
+คาถา สัตตูหลีกปาย|M|BT07-052|1|||จอมเวทย์|N||||
+คาถา สัตตูหลีกปาย|M|BT07-052|1|||จอมเวทย์|N|||SCR|
+ชะตาไม่มีวันจบลง|M|BT07-053|4|||จอมเวทย์|N||||
+พลังแห่งควางสิริมงคง|M|BT07-054|0|||จอมเวทย์|N||||
+พลังแห่งควางสิริมงคง|M|BT07-054|0|||จอมเวทย์|N|||SCR|
+เปลี่ยนเมน|M|BT07-055|2|||จอมเวทย์|N||||
+กลับบ้านเก่า|M|BT07-056|3|||จอมเวทย์|N||||
+ลิสต์แผนการ|M|BT07-057|2|||จอมเวทย์|N||||
+แบงค์ Portal|M|BT07-058|0|||จอมเวทย์|N||||
+พันปักษา|M|BT07-059|0|||สัตว์วิเศษ|R||||
+พันปักษา|M|BT07-059|0|||สัตว์วิเศษ|R|||SCR|
+คาถา สตอปปุ|M|BT07-060|2|||จอมเวทย์|R||||
+ขอจบรายการแต่เพียงเท่านี้|M|BT07-061|2|||จอมเวทย์|R||||
+ขนมณี แฟลร์|M|BT07-062|2|||สัตว์วิเศษ|M||||
+ไม้กายสิทธิ์|M|BT07-063|3|||จอมเวทย์|M||||
+เก้าอี้ เฟิร์สคลาส|M|BT07-064|1|||จอมเวทย์|M||||
+ปลอกคอซื่อสัตย์|M|BT07-065|4|||จอมเวทย์|M||||
+อาคารผู้โดยสารชั้นต่ำ|M|BT07-066|0|||จอมเวทย์|L||||
+หมู่บ้านเห็ด|M|BT07-067|2|||จอมเวทย์|L||||
+หมู่บ้านเห็ด|M|BT07-067|2|||จอมเวทย์|L|||SCR|
+ดินแดนหิมะสีเทา|M|BT07-068|2|||ต่างชาติ|L||||
+สถานีตำรวจ|M|BT07-069|2|||จอมเวทย์|L||||
+งานเลี้ยงโดนใจ หัวใจโดนเธอ|M|BT07-070|2|||จอมเวทย์|L||||
+เสาธง|C|BT07-071|3|2|R|สิ่งก่อสร้าง|||1||
+ยานรายการ เถียงทันหน่วง|C|BT07-072|3|2|P|หุ่นยนต์|||4||
+ยานรายการ เถียงทันหน่วง|C|BT07-072|3|2||หุ่นยนต์|||4|SCR|
+บัลลังก์ตั๊กแตนศตวรรษ|C|BT07-073|2|2|G|แมลง||1|4||
+ไม่นะ มณโท !|L|BT07-074|||||||||
+ไม่นะ พี่หน่วง !|L|BT07-075|||||||||
+หุ่นนักรบผู้กล้าปีศาจ : อีวิลไมเกรน|A|BT08-001|5|4|R|หุ่นยนต์|||2||
+หุ่นนักรบผู้กล้าปีศาจ : อีวิลไมเกรน|A|BT08-001|5|4|R|หุ่นยนต์|||2|SCR|
+ไอ้ชิด อโยธยา Express|A|BT08-002|3|1|R|คน|||3||
+เณรคู ศิษย์เอกพระอาจารย์|A|BT08-003|1|0|R|คน|||4||
+น้าเอี๊ยด นักบรรเลง|A|BT08-004|4|1|R|คน|||3||
+ซุนกวน ผู้นำพยัคฆ์แห่งง่อก๊ก|A|BT08-005|4|6|R|ต่างชาติ||1|2||
+ซุนกวน ผู้นำพยัคฆ์แห่งง่อก๊ก|A|BT08-005|4|6|R|ต่างชาติ||1|2|SCR|
+จิวยี่ กุนซือสำอางแห่งง่อก๊ก|A|BT08-006|3|2|R|ต่างชาติ|||1||
+จิวท่าย ขุนพลคนเหล็กแห่งง่อก๊ก|A|BT08-007|3|3|R|ต่างชาติ|||4||
+กาลาฮัด อัศวินโต๊ะกลมแห่งความกล้าหาญ|A|BT08-008|6|3|R|ต่างชาติ|||2||
+เอเจ้นท์สมูท|A|BT08-009|3|0|R|เอเลี่ยน|||2||50
+เซอร์นัท ดาบแห่งแสงอรุณ|A|BT08-010|4|4|R|คน|||2||
+เซอร์นัท ดาบแห่งแสงอรุณ|A|BT08-010|4|4||คน|||2|SCR|
+ซาบะริว นักกวาดล้างมือเก๋า|A|BT08-011|7|7|R|ต่างชาติ|||1||
+หมอเสริมศักดิ์|A|BT08-012|3|2|R|คน|||1||
+เปรตรัททาทุย|A|BT08-013|4|1|B|รัททาทุย|||2||
+ริกกี้ ฆาตกรถลกหนัง|A|BT08-014|4|4|B|แมลง|||1||
+ริกกี้ ฆาตกรถลกหนัง|A|BT08-014|4|4||แมลง|||1|SCR|
+ริกกี้ เชฟมัมมามิย่า|A|BT08-015|4|3|B|แมลง|||2||
+ริกกี้ คุณหมอ|A|BT08-016|5|5|B|แมลง|||0||
+มอเดรด อัศวินโต๊ะกลมแห่งการทรยศ|A|BT08-017|4|3|B|ต่างชาติ|||0||
+มอเดรด อัศวินโต๊ะกลมแห่งการทรยศ|A|BT08-017|4|3||ต่างชาติ|||0|SCR|
+โจโฉ ผู้นำเบ็ดเสร็จแห่งวุยก๊ก|A|BT08-018|5|4|B|ต่างชาติ||1|2||
+โจโฉ ผู้นำเบ็ดเสร็จแห่งวุยก๊ก|A|BT08-018|5|4||ต่างชาติ||1|2|SCR|
+สุมาอี้ กุนซือเจ้าเล่ห์แห่งวุยก๊ก|A|BT08-019|4|1|B|ต่างชาติ|||1||
+สุมาอี้ กุนซือเจ้าเล่ห์แห่งวุยก๊ก|A|BT08-019|4|1||ต่างชาติ|||1|SCR|
+เตียวเลี้ยว ขุนพลมือปราบแห่งวุยก๊ก|A|BT08-020|4|4|B|ต่างชาติ|||2||
+โอตะท๊อปโดเนท|A|BT08-021|0|0|B|ต่างชาติ|||2||
+นายพลทหารหิมะ หลินอัน|A|BT08-022|4|4|B|ต่างชาติ|||2||
+มฤตยูเทวี|A|BT08-023|4|2|P|นรก|||2||
+มฤตยูเทวี|A|BT08-023|4|2||นรก|||2|SCR|
+มฤตยูเทวี|A|BT08-023|4|2||นรก|||2|PR|
+มฤตยูเทวี|A|BT08-023|4|2||นรก|||2|CBR|
+อีสานสลิงเกอร์ ปิ๊ก|A|BT08-024|3|2|P|คน|||3||
+อีสานสลิงเกอร์ ปิ่น|A|BT08-025|3|2|P|คน|||2||
+อีสานสลิงเกอร์ เปอร์|A|BT08-026|3|3|P|คน|||1||
+อีสานสลิงเกอร์ เปอร์|A|BT08-026|3|3||คน|||1|SCR|
+กัฟแดน ผู้อำนวยการจอมเวทย์|A|BT08-027|4|4|P|คน|||2||
+พี่ไท่ น้องเฟิง นักดาบวายุ|A|BT08-028|4|2|P|ต่างชาติ|||0||
+เนียจัง ไอดอลอินฟลูเอนเซอร์|A|BT08-029|4|2|P|คน|||2||
+เนียจัง ไอดอลอินฟลูเอนเซอร์|A|BT08-029|4|2||คน|||2|SCR|
+เต่า|A|BT08-030|5|4|G|เอเลี่ยน||D|2||
+เต่า|A|BT08-030|5|4||เอเลี่ยน||D|2|SCR|
+พูรินอล Overdose|A|BT08-031|5|3|G|หุ่นยนต์|||1||
+พูรินอล Overdose|A|BT08-031|5|3||หุ่นยนต์|||1|SCR|
+ชาโค่ล Overdose|A|BT08-032|5|4|G|หุ่นยนต์|||0||
+เซตาม่อน Overdose|A|BT08-033|4|5|G|หุ่นยนต์|||2||
+ฮากลิ้ง วานรกับหมา|A|BT08-034|3|2|G|สัตว์|||2||
+เล่าปี่ ผู้นำคุณธรรมแห่งจ๊กก๊ก|A|BT08-035|1|1|G|ต่างชาติ||1|4||
+เล่าปี่ ผู้นำคุณธรรมแห่งจ๊กก๊ก|A|BT08-035|1|1||ต่างชาติ||1|4|SCR|
+ขงเบ้ง กุนซือซ่อนกายแห่งจ๊กก๊ก|A|BT08-036|4|1|G|ต่างชาติ|||1||
+ขงเบ้ง กุนซือซ่อนกายแห่งจ๊กก๊ก|A|BT08-036|4|1||ต่างชาติ|||1|SCR|
+จูล่ง ขุนพลสุภาพบุรุษแห่งจ๊กก๊ก|A|BT08-037|6|5|G|ต่างชาติ|||2||
+มณโฑ ราชินีเหล่ายักษ์|A|BT08-038|5|3|G|คน|||1||
+มณโฑ ราชินีเหล่ายักษ์|A|BT08-038|5|3||คน|||1|SCR|
+ราชา รด.|A|BT08-039|3|1|G|คน|||1||
+จ่าอเวจี ทหารครูฝึก|A|BT08-040|3|4|G|คน|||0||
+ศาสตราจารย์วานร|A|BT08-041|2|3|G|สัตว์|||1||
+ปีศาจวานร|A|BT08-042|4|4|G|สัตว์|||2||
+รถถังเฟืองเหล็ก|A|BT08-043|5|6|G|หุ่นยนต์|||1||
+ควายแบงค์|A|BT08-044|4|5|R|สัตว์|||0||
+หัวหน้าทหารหิมะ โจว|A|BT08-045|2|4|B|ต่างชาติ|||1||
+ตัวอะไรสักอย่างที่ใหญ่และน่ารัก|A|BT08-046|8|8|B|เอเลี่ยน|||2||
+นกอีก๋อย|A|BT08-047|3|3|G|สัตว์|||3||
+ขายแดก !!!|M|BT08-048|3|||จอมเวทย์|N||||
+แหมกำบ่อ้าย|M|BT08-049|3|||จอมเวทย์|N||||
+ขอดูดดดดดด|M|BT08-050|2|||จอมเวทย์|N||||
+หนังมนุษย์ ชุดแก้แค้น|M|BT08-051|2|||แมลง|N||||
+หนังมนุษย์ ชุดแก้แค้น|M|BT08-051|2|||แมลง|N|||SCR|
+Overdose|M|BT08-052|1|||จอมเวทย์|N||||
+การสละชีพของเทพธิดา|M|BT08-053|3|||เทพ|N||||
+การสละชีพของเทพธิดา|M|BT08-053|3|||เทพ|N|||SCR|
+โจมตีตัวฉันให้โดนถ้าหากเธอทำได้|M|BT08-054|2|||จอมเวทย์|R||||
+แผนการ : ตอกฝาโลง|M|BT08-055|2|||จอมเวทย์|R||||
+ลุ้นเยี่ยวเหนียว|M|BT08-056|0|||จอมเวทย์|R||||
+แหม่อ้ายก็~~~|M|BT08-057|2|||จอมเวทย์|R||||
+รัททาทุยเกาะหน้า|M|BT08-058|1|||รัททาทุย|R||||
+ดาบศักดิ์สิทธิ์ คาเรนต์|M|BT08-059|2|||จอมเวทย์|M||||
+ดาบศักดิ์สิทธิ์ เอกซ์คาลิเบอร์|M|BT08-060|2|||จอมเวทย์|M|1|||
+ดาบศักดิ์สิทธิ์ เอกซ์คาลิเบอร์|M|BT08-060|2|||จอมเวทย์|M|1||SCR|
+ขวาน 7 สี|M|BT08-061|2|||จอมเวทย์|M||||
+เนยถั่ว|M|BT08-062|1|||จอมเวทย์|M||||
+บิฟร็อสต์ สะพานสายรุ้ง|M|BT08-063|2|||เทพ|L||||
+โรงเรียนเวทย์มนต์|M|BT08-064|2|||จอมเวทย์|L||||
+โคกอีสานนูน|M|BT08-065|2|||ต้นไม้|L|1|||
+โคกอีสานนูน|M|BT08-065|2|||ต้นไม้|L|1||SCR|
+เรือรบโบราณ|C|BT08-066|4|3|R|ต้นไม้|||2||
+สนามของนักวิ่งตัวจริง|C|BT08-067|0|0|R|สิ่งก่อสร้าง|||1||
+ยิมทมิฬ|C|BT08-068|4|1|B|หุ่นยนต์|||2||
+บัลลังก์โอดิน|C|BT08-069|3|4|P|เทพ|||2||
+บัลลังก์โอดิน|C|BT08-069|3|4|P|เทพ|||2|SCR|
+อ่อ กระต่ายตาย|L|BT08-070|||||||||
+พระอิศวร วีลแชร์|A|BT09-001|0|0|R|เทพ|||4||
+พระอิศวร วีลแชร์|A|BT09-001|0|0||เทพ|||4|PR|
+พระอิศวร วีลแชร์|A|BT09-001|0|0||เทพ|||4|CBR|
+เนอร์เกิ้ล เนียร์ สมาชิกลัทธิแห่หัว|A|BT09-002|4|2|R|ไซเบอร์||D|1||
+เนอร์เกิ้ล เนียร์ สมาชิกลัทธิแห่หัว|A|BT09-002|4|2|R|ไซเบอร์||D|1|SCR|
+นางฟ้าลูกซอง|A|BT09-003|2|2|R|เทพ|||0||
+DJ ปีโป้|A|BT09-004|4|4|R|คน|||0||
+กัณหา นาคเกล็ดดำ|A|BT09-005|3|4|R|สัตว์วิเศษ|||1||
+กัณหา นาคเกล็ดดำ|A|BT09-005|3|4||สัตว์วิเศษ|||1|SCR|
+ลูเซีย โพลีกอน|A|BT09-006|2|2|R|ไซเบอร์||D|2||
+ลูเซีย โพลีกอน|A|BT09-006|2|2|R|ไซเบอร์||D|2|SCR|
+โฮคุ โพลีกอน|A|BT09-007|5|4|R|ไซเบอร์||D|2||
+โฮคุ โพลีกอน|A|BT09-007|5|4|R|ไซเบอร์||D|2|SCR|
+เพมมุ ยอดมนุษย์|A|BT09-008|2|2|R|คน|||4||
+เพมมุ ยอดมนุษย์|A|BT09-008|2|2||คน|||4|SCR|
+สไปรท์ ยอดสุนัข|A|BT09-009|4|4|R|สัตว์|||2||
+เมย์ แวมไพร์โกธิค|A|BT09-010|3|2|R|ผี|||3||
+เจ้าหญิงรวงข้าว|A|BT09-011|2|1|R|สัตว์วิเศษ|||3||
+กุ่ย หน้าตาดี|A|BT09-012|2|2|B|คน|||3||
+ฮอล หน้าตาดี|A|BT09-013|2|2|B|คน|||3||
+นาย หน้าตาดี|A|BT09-014|2|2|B|คน|||3||
+เพนกวินหิมะ เหลียง|A|BT09-015|4|1||สัตว์|||2||
+เพนกวินหิมะ เหลียง|A|BT09-015|4|1||สัตว์|||2|SCR|
+รัททาทุย นินจา|A|BT09-016|3|3||รัททาทุย|||1||
+พี่โปจิ เจ้าลัทธิแห่หัว|A|BT09-017|5|4|B|คน||D|1||
+พี่โปจิ เจ้าลัทธิแห่หัว|A|BT09-017|5|4|B|คน||D|1|SCR|
+ตัวอะไรสักอย่างที่เป็นมิตรและพูดมาก|A|BT09-018|3|2|B|เอเลี่ยน|||2||
+หมาป่าเดียวดาย|A|BT09-019|4|4|B|สัตว์||1|2||
+กัล มนุษย์ดาว R18|A|BT09-020|6|1|B|เอเลี่ยน|||2||
+กัล มนุษย์ดาว R18|A|BT09-020|6|1||เอเลี่ยน|||2|SCR|
+คราเค่น ปลาหมึกปีศาจ|A|BT09-021|8|5||สัตว์วิเศษ|||2||
+โซน่า โพลีกอน|A|BT09-022|4|2||ไซเบอร์||D|2||
+โซน่า โพลีกอน|A|BT09-022|4|2|B|ไซเบอร์||D|3|SCR|
+ริน บันนี่เกิร์ล|A|BT09-023|3|1|P|คน|||1||
+ธอร์ บุตรแห่งโอดิน|A|BT09-024|4|5|P|เทพ|||0||
+ธอร์ บุตรแห่งโอดิน|A|BT09-024|4|5||เทพ|||0|SCR|
+โลกิ เจ้าชายยักษ์น้ำแข็ง|A|BT09-025|4|0|P|เทพ|||4||
+แมวดำ สมาชิกลัทธิแห่หัว|A|BT09-026|2|1|P|สัตว์||D|4||
+มิสเตอร์โบโบ้|A|BT09-027|5|2||เทพ|||2||
+แบงค์ ตัวแดง|A|BT09-028|5|4||คน|||2||
+แบงค์ ตัวแดง|A|BT09-028|5|4||คน|||2|SCR|
+สตางค์น้องชายแบงค์ ตัวเขียว|A|BT09-029|4|2||คน|||1||
+ลาพิเน่ โพลีกอน|A|BT09-030|4|1|P|ไซเบอร์||D|3||
+ลาพิเน่ โพลีกอน|A|BT09-030|4|1|P|ไซเบอร์||D|3|SCR|
+ลูเซเน่ โพลีกอน|A|BT09-031|4|3|P|ไซเบอร์||D|1||
+ลูเซเน่ โพลีกอน|A|BT09-031|4|3|P|ไซเบอร์||D|1|SCR|
+วินดิโก้|A|BT09-032|6|8||ผี||1|0||
+สกินวอคเกอร์|A|BT09-033|6|1||ผี|||1||
+ปอนด์ สมาชิกลัทธิแห่หัว|A|BT09-034|5|3|G|หุ่นยนต์||D|2||
+เนฟิล ยักษ์ตัวสุดท้าย|A|BT09-035|9|20|G|ยักษ์||1|0||
+ภูติผลไม้ มะม่วง|A|BT09-036|2|1|G|เทพ|||2||
+ภูติผลไม้ มะเหมี่ยว|A|BT09-037|2|1|G|เทพ|||2||
+ภูติผลไม้ มะเฟือง|A|BT09-038|2|1|G|เทพ|||2||
+ภูติผลไม้ มะขาม|A|BT09-039|2|1|G|เทพ|||2||
+จ่ายุทธ ทหารรักชาติ|A|BT09-040|3|3||คน|||2||
+จ่ายุทธ ทหารรักชาติ|A|BT09-040|3|3||คน|||2|SCR|
+ท้าวเวสสุวรรณ|A|BT09-041|6|5|G|ยักษ์||1|3||
+ท้าวเวสสุวรรณ|A|BT09-041|6|5||ยักษ์||1|3|SCR|
+นักท่องเรื่องราว ขวัญตา|A|BT09-042|4|3|G|ต่างชาติ|||2||
+นักท่องเรื่องราว ขวัญตา|A|BT09-042|4|3||ต่างชาติ|||2|SCR|
+ขวัญตา เรื่องราว ราชาแห่งนาค|A|BT09-043|6|0|G|หุ่นยนต์|||2||
+ขวัญตา เรื่องราว ครุฑเจ้าเวหา|A|BT09-044|6|4|G|หุ่นยนต์|||2||
+พอง พอง|A|BT09-045|3|4||สัตว์||D|1||
+ตัวอะไรสักอย่าง|A|BT09-046|6|6|B|เอเลี่ยน|||1||
+วิญญาณร้าย|A|BT09-047|1|4||ผี|||0||
+พี่่ NUT|A|BT09-048|5|5||สัตว์||D|3||
+ขอโทษสังคม|M|BT09-049|4|||จอมเวทย์|N||||
+บลัดดี้แมรี่|M|BT09-050|0|||ผี|N|1|||
+ไม้กวาดปีกปักษา|M|BT09-051|3|||เทพ|N|1|||
+ไม้กวาดปีกปักษา|M|BT09-051|3|||เทพ|N|1||SCR|
+ผจญภัยด้วยกัน|M|BT09-052|2|||จอมเวทย์|N||||
+ขอให้ตีนไม่ติดพื้น|M|BT09-053|2|||ฤษี|N||||
+แผนการตู้เย็นทับ|M|BT09-054|1|||จอมเวทย์|N||||
+คาถา เสกควายเข้าท้อง|M|BT09-055|0|||จอมเวทย์|N|1|||
+Skill : Full Drive|M|BT09-056|0|||จอมเวทย์|N||||
+ไต้ฝุ่น|M|BT09-057|2|||จอมเวทย์|N||||
+ไต้ฝุ่น|M|BT09-057|2|||จอมเวทย์|N|||SCR|
+Ah-ah, ah!|M|BT09-058|2|||เทพ|N||||
+Skill : Hypersense|M|BT09-059|1|||จอมเวทย์|R||||
+Skill : Second Energy|M|BT09-060|1|||จอมเวทย์|R||||
+ทะลุบ้านทะลุโกศ|M|BT09-061|2|||จอมเวทย์|R||||
+ตัดเน็ต|M|BT09-062|1|||จอมเวทย์|R||||
+ตัดเน็ต|M|BT09-062|1|||จอมเวทย์|R|||SCR|
+ลงกาโพรเทคชั่น|M|BT09-063|1|||ยักษ์|R||||
+ค้อนโยเนียร์|M|BT09-064|2|||เทพ|M||||
+กระสอบ|M|BT09-065|0|||จอมเวทย์|M||||
+หอกศักดิ์สิทธิ์ เอ็ดดา|M|BT09-066|2|||เทพ|M||||
+อาวุธของเพมมุ ปืนพกรุ่น 19|M|BT09-067|2|||หุ่นยนต์|M||||
+กระบองตำรวจ|M|BT09-068|2|||คน|M||||
+ด่านตรวจเข้าเมือง|M|BT09-069|1|||จอมเวทย์|L||||
+ด่านตรวจเข้าเมือง|M|BT09-069|1|||จอมเวทย์|L|||SCR|
+สวนกล้วยหนีภาษี|M|BT09-070|2|||ต้นไม้|L||||
+ป่าพงไพร เผ่าพงศ์พันธุ์|M|BT09-071|4|||ต้นไม้|L||||
+โพเดียมสมาคมผู้รู้ความจริง|C|BT09-072|2|3||สิ่งก่อสร้าง|||1||
+สำนักภฤคุ|C|BT09-073|4|1||ฤษี|||2||
+ตู้เสื้อผ้าของริกกี้|C|BT09-074|2|1||แมลง|||1||
+ห้างโรงเกลือ|C|BT09-075|3|2||สิ่งก่อสร้าง|||1||
+ชิโยเมะ นินจาสาว|A|BT10-006|2|2|R|ต่างชาติ|||3||
+สิ่งปฏิกูลมีชีวิต|A|BT10-017|1|1|B|สัตว์วิเศษ|||1||
+สิ่งปฏิกูลสีเงิน|A|BT10-018|1|1|B|สัตว์วิเศษ|||1||
+ราชาสิ่งปฏิกูล|A|BT10-019|5|4|B|สัตว์วิเศษ|||2||
+ผู้คุมกฎแห่งภาคีมะม่วง|A|BT10-040|5|4|G|ต้นไม้|||1||
+ราชันย์ตั๊กแตนศตวรรษ|A|BT10-044|4|2|G|แมลง|||3||
+ทะลวงส้วม|M|BT10-062|1|||จอมเวทย์|N||||
+จอมเวทย์ เดสสึหวา|A|BT10-026|2|1|P|ต่างชาติ|||2||
+จอมเวทย์ โกลเด้น|A|BT10-025|2|1|P|คน|||4||
+นักข่าวสาว เดย์วัน|A|BT10-045|1|1|G|คน|||1||
+พระอีสาน|A|BT10-033|6|1|P|เทพ|||3||
+แก๊ง Super Card|A|BT10-035|8|3|P|คน|||2||
+เซนเซไฮ|A|BT10-048|4|1|G|คน|||1||
+1 - 2 - 2|M|BT10-057|1|||จอมเวทย์|N||||
+ไอ้นัท - คนบ้าจั่ว|A|BT10-008|4|2|R|คน|||2||
+ผู้ขุดหาความว่างเปล่า แบงค์ Miner|A|BT10-038|5|4|P|นรก|||2||
+ผู้ขุดหาความว่างเปล่า แบงค์ Miner|A|BT10-038|5|4|P|นรก|||2|SCR|
+มาโกะ มารดาแห่งภาคีมะม่วง|A|BT10-039|10|6|G|ต้นไม้||1|2||
+นักรบทองแห่งภาคีมะม่วง|A|BT10-041|3|3|G|ต้นไม้|||2||
+ผู้พิทักษ์แห่งภาคีมะม่วง|A|BT10-042|1|1|G|ต้นไม้|||3||
+ไปคุยกับรากมะม่วง|M|BT10-063|2|||จอมเวทย์|R||||
+ตำรวจเอไอ มุเค|A|BT10-007|3|2|R|หุ่นยนต์|||3||
+ตำรวจพ่อลูกอ่อน คามุ|A|BT10-046|4|3|G|คน|||1||
+ตำรวจสัมภเวสี ทาย|A|BT10-034|4|2|P|ผี|||2||
+คาถา โปเตกโต้|M|BT10-066|2||P|จอมเวทย์|R||||
+ดวงจันทร์วันเพ็ญ|C|BT10-073|4|5|R|สิ่งก่อสร้าง|||0||
+ตัวอะไรสักอย่างที่คล้ายกระรอกและนิสัยไม่ดี|A|BT10-016|4|2|B|เอเลี่ยน|||1||
+ศิลาหยินหยาง|M|BT10-059|3|||แมลง|N||||
+นายนิรยบาล นิมมา|A|BT10-027|4|2|P|นรก|||2||
+นายนิรยบาล ดาร์กช็อก|A|BT10-028|3|2|P|นรก|||1||
+โกเอมอน นินจาจอมโจร|A|BT10-004|6|3|R|ต่างชาติ|||2||
+ฮันโซ นินจาในตำนาน|A|BT10-005|3|4|R|ต่างชาติ|||0||
+ซีเกิร์ด ผู้ปราบมังกรฟาฟเนียร์|A|BT10-029|6|6|P|เทพ||1|1||
+ซีเกิร์ด ผู้ปราบมังกรฟาฟเนียร์|A|BT10-029|6|6|P|เทพ||1|1|SCR|
+วิชานินจา ผนึกเงา|M|BT10-064|2||R|จอมเวทย์|R||||
+วิชานินจา รุกรับพลิกผัน|M|BT10-065|2||R|จอมเวทย์|R||||
+พระอิศวร นักเต้น|A|BT10-002|4|4|R|เทพ|||0||
+พระพิฆเนศ|A|BT10-001|4|2|R|เทพ|||2||
+การเลือกสรรของ พระพิฆเนศ|M|BT10-053|0|||เทพ|N||||
+พี่บูม แก๊งขยะ|A|BT10-003|4|3|R|คน||D|3||
+พี่บูม แก๊งขยะ|A|BT10-003|4|3|R|คน||D|3|SCR|
+พี่ซี๊ด แก๊งขยะ|A|BT10-032|2|1|P|เทพ||D|2||
+พี่ซี๊ด แก๊งขยะ|A|BT10-032|2|1|P|เทพ||D|2|SCR|
+ZeedZad Server|C|BT10-074|4|2|B|ไซเบอร์||D|4||
+พี่เจมส์ แก๊งขยะ|A|BT10-013|5|4|B|คน||D|2||
+เบรกเกต แก๊งขยะ|A|BT10-047|4|4|G|คน||D|2||
+พระพิฆเนศ|A|BT10-001|4|2|R|เทพ|||2|SCR|
+ฮันโซ นินจาในตำนาน|A|BT10-005|3|4|R|ต่างชาติ|||0|SCR|
+ฮันโซ นินจาในตำนาน|A|BT10-005|3|4|R|ต่างชาติ|||0|PR|
+ฮันโซ นินจาในตำนาน|A|BT10-005|3|4|R|ต่างชาติ|||0|CBR|
+ชิโยเมะ นินจาสาว|A|BT10-006|2|2|R|ต่างชาติ|||3|SCR|
+K-BO ยอดหุ่นยนต์|A|BT10-009|3|0|R|หุ่นยนต์|||2||
+ซัลลี่วอดก้า|A|BT10-010|4|4|R|สัตว์วิเศษ|||1||
+ซุนฮูหยิน เจ้าหญิงขุนพลแห่งง่อก๊ก|A|BT10-011|2|1|R|ต่างชาติ|||2||
+บ่าวแสม ซามูไรปักษ์ใต้|A|BT10-012|5|4|R|คน|||1||
+บ่าวแสม ซามูไรปักษ์ใต้|A|BT10-012|5|4|R|คน|||1|SCR|
+ลิขวิดบอย|A|BT10-014|4|2|B|คน|||1||
+ริกกี้ แท็กซี่ตีนแมลงสาบ|A|BT10-015|4|2|B|แมลง|||2||
+เตียวคับ ขุนพลสง่างามแห่งวุยก๊ก|A|BT10-020|4|4|B|ต่างชาติ|||2||
+เตียวคับ ขุนพลสง่างามแห่งวุยก๊ก|A|BT10-020|4|4|B|ต่างชาติ|||2|SCR|
+แบงค์ ชาวดาวพฤหัส|A|BT10-021|3|2|B|เอเลี่ยน|||2||
+เดออง อัศวินเฟมบอย|A|BT10-022|5|3|B|ต่างชาติ|||1||
+ไมค์วิสกี้|A|BT10-023|5|2|B|สัตว์วิเศษ|||1||
+ฯลฯ กระบือชาวร๊อค|A|BT10-024|5|5|B|สัตว์|||2||
+จอมเวทย์ โกลเด้น|A|BT10-025|2|1|P|คน|||4|SCR|
+จอมเวทย์ เดสสึหวา|A|BT10-026|2|1|P|ต่างชาติ|||2|SCR|
+ยอดมนุษย์หัวยางลบ|A|BT10-030|3|3|P|ต่างชาติ|||2||
+พี่หน่วงเพชรฆาตโซเชียล|A|BT10-031|4|2|P|คน|||1||
+พระอีสาน|A|BT10-033|6|1|P|เทพ|||3|SCR|
+แก๊ง Super Card|A|BT10-035|8|3|P|คน|||2|SCR|
+เนโกะเมะ ยูริ|A|BT10-036|4|3|P|สัตว์|||1||
+ตันก๋ง กุนซือคู่กายเทพสงคราม|A|BT10-037|4|1|P|ต่างชาติ|||1||
+ผู้คุมกฎแห่งภาคีมะม่วง|A|BT10-040|5|4|G|ต้นไม้|||1|SCR|
+ไมยราพ|A|BT10-043|5|4|G|ยักษ์|||1||
+ไมยราพ|A|BT10-043|5|4|G|ยักษ์|||1|SCR|
+ราชันย์ตั๊กแตนศตวรรษ|A|BT10-044|4|2|G|แมลง|||3|SCR|
+ม้าเฉียว ขุนพลทรนงแห่งจ๊กก๊ก|A|BT10-049|4|4|G|ต่างชาติ|||0||
+ชิบาตะ โบตัน|A|BT10-050|3|4|G|สัตว์|||1||
+กัปตัน Nuke|A|BT10-051|5|5|R|คน|||3||
+ลูน่า กระต่ายดวงจันทร์|A|BT10-052|4|4|B|สัตว์วิเศษ|||2||
+เหนือฟ้าใต้หล้า ข้าคือมหาจอมเวทย์|M|BT10-054|1|||จอมเวทย์|N||||
+เหนือฟ้าใต้หล้า ข้าคือมหาจอมเวทย์|M|BT10-054|1|||จอมเวทย์|N|||SCR|
+คาถา เฟรนลี่คัม|M|BT10-055|4|||จอมเวทย์|N||||
+ชีวิตที่พอดี|M|BT10-056|1|||จอมเวทย์|N||||
+พายุหิมะเริงระบำ|M|BT10-058|2|||จอมเวทย์|N||||
+ผู้มาเยือน|M|BT10-060|2|||เอเลี่ยน|N||||
+ผู้มาเยือน|M|BT10-060|2|||เอเลี่ยน|N|||SCR|
+นารายณ์ 10 ปาง|M|BT10-061|1|||เทพ|N||||
+ศาสตราวุธศักดิ์สิทธิ์ โวลุสปา|M|BT10-067|0|||เทพ|M||||
+หยินหยางทอร์นาโด|M|BT10-068|2|||แมลง|M||||
+อาวุธของเพมมุ ดาบมารไร้พ่าย|M|BT10-069|2|||นรก|M||||
+อาวุธของเพมมุ ดาบมารไร้พ่าย|M|BT10-069|2|||นรก|M|||SCR|
+ดินแดนยุติธรรม|M|BT10-070|2|||จอมเวทย์|L||||
+Myth Universe Podcast|M|BT10-071|2|||หุ่นยนต์|L|D|||
+Myth Universe Podcast|M|BT10-071|2|||หุ่นยนต์|L|D||SCR|
+หอสมุดจอมเวทย์|C|BT10-072|2|1||จอมเวทย์|||2||
+ไม่นะ เตียวเสียน!|L|BT10-075|||||||||
+ฤาษีอังคต|A|BT11-001|4|3|R|ฤษี|||2||
+ไอ้นัท คนข้ามเวลา|A|BT11-002|3|1|R|คน|||3||
+เซอร์นัท ผู้นำแห่งอัศวินตลิ่งชัน|A|BT11-003|5|3|R|คน|||1||
+เซอร์นัท ผู้นำแห่งอัศวินตลิ่งชัน|A|BT11-003|5|3|R|คน|||1|SCR|
+มือปืนนคร บ่าวจุ้ย|A|BT11-004|4|4|R|คน|||2||
+มือปืนนคร บ่าวจุ้ย|A|BT11-004|4|4|R|คน|||2|SCR|
+มือปืนนคร ชานน|A|BT11-005|3|3|R|คน|||2||
+มือปืนนคร นายหัว|A|BT11-006|5|1|R|คน|||4||
+กิมมิคแมน|A|BT11-007|4|4|R|คน|||2||
+ออส่วนบอย|A|BT11-008|3|1|R|คน|||3||
+นักฆ่าแม่เหล็ก มอนซี|A|BT11-009|5|2|R|คน|||3||
+นักฆ่าแม่เหล็ก มอนซี|A|BT11-009|5|2|R|คน|||3|SCR|
+ฟูมะ นินจาแห่งสายลม|A|BT11-010|3|3|R|ต่างชาติ|||2||
+มิสทรอม่า|A|BT11-011|3|2|R|เอเลี่ยน|||2||
+น้ากบ|A|BT11-012|4|1|R|สัตว์|||1||
+ซุนหงอคง|A|BT11-013|4|4|R|เทพ|||0||
+ซุนหงอคง|A|BT11-013|4|4|R|เทพ|||0|SCR|
+มิเรีย หน่วยรบ XVI|A|BT11-014|2|1|B|คน|||1||
+ฮินะ หน่วยรบ XVI|A|BT11-015|2|1|B|คน|||2||
+ฮินะ หน่วยรบ XVI|A|BT11-015|2|1|B|คน|||2|SCR|
+คาร์ร่า หน่วยรบ XVI|A|BT11-016|4|2|B|คน|||2||
+เอริ หน่วยรบ XVI|A|BT11-017|4|2|B|คน|||1||
+เอริ หน่วยรบ XVI|A|BT11-017|4|2|B|คน|||1|SCR|
+ชาช่า อัศวินตลิ่งชันคนเก่ง|A|BT11-018|4|4|B|คน|||2||
+มีมมิ นักเรียนดีเด่น|A|BT11-019|2|0|B|คน|||4||
+ไวรัสแห่งการแพร่เชื้อ บลาสเตอร์|A|BT11-020|2|2|B|ไซเบอร์|||3||
+ไวรัสแห่งการช่วงชิง โทรจัน|A|BT11-021|4|3|B|ไซเบอร์|||2||
+ไวรัสแห่งความเป็นไปได้ ครีปเปอร์|A|BT11-022|5|5|B|ไซเบอร์|||2||
+ไวรัสแห่งความเป็นไปได้ ครีปเปอร์|A|BT11-022|5|5|B|ไซเบอร์|||2|SCR|
+ตัวอะไรสักอย่างที่สุดเท่และเป็นนักดาบ|A|BT11-023|5|4|B|เอเลี่ยน|||1||
+เพนกวิ้น ฮัท|A|BT11-024|6|2|B|สัตว์||D|1||
+เพนกวิ้น ฮัท|A|BT11-024|6|2|B|สัตว์||D|1|SCR|
+ซัวเจ๋ง|A|BT11-025|3|3|B|ผี|||2||
+ลุกซุเรีย โปรดิวเซอร์ปีศาจ|A|BT11-026|8|3|P|นรก|||2||
+เจ้าแห่งความมืด|A|BT11-027|10|10|P|ผี||1|0||
+YaiMakMak|A|BT11-028|4|5|P|คน||D|0||
+YaiMakMak|A|BT11-028|4|5|P|คน||D|0|SCR|
+แอชลีย์|A|BT11-029|4|2|P|คน||D|1||
+แอชลีย์|A|BT11-029|4|2|P|คน||D|1|SCR|
+น้าแมน|A|BT11-030|4|1|P|คน||D|4||
+น้าแมน|A|BT11-030|4|1|P|คน||D|4|SCR|
+คุณคำดี|A|BT11-031|4|3|P|คน||D|1||
+คุณคำดี|A|BT11-031|4|3|P|คน||D|1|SCR|
+ไมค์ตี้ทอยแมน|A|BT11-032|4|3|P|หุ่นยนต์|||1||
+เลอร์ติ๊ก สหายอัศวินตลิ่งชัน|A|BT11-033|3|3|P|ต่างชาติ|||2||
+ยูนิคอร์นขี้เมา|A|BT11-034|3|2|P|สัตว์วิเศษ|||2||
+ตือโป๊ยก่าย|A|BT11-035|2|2|P|สัตว์|||2||
+ภูติผลไม้ แตงกวา|A|BT11-036|2|1|G|เทพ|||2||
+ภูติผลไม้ แตงกวา|A|BT11-036|2|1|G|เทพ|||2|SCR|
+มนุษย์เครื่องใช้ไฟฟ้า เบเซอร์|A|BT11-037|4|2|G|หุ่นยนต์|||2||
+เครื่องใช้ไฟฟ้า เฟเธอร์|A|BT11-038|1|1|G|หุ่นยนต์|||1||
+เครื่องใช้ไฟฟ้า ฟรีซเซอร์|A|BT11-039|1|1|G|หุ่นยนต์|||1||
+เบเซอร์ โหมด เฟเธอร์|A|BT11-040|6|5|G|หุ่นยนต์|||2||
+เบเซอร์ โหมด ฟรีซเซอร์|A|BT11-041|6|6|G|หุ่นยนต์|||2||
+อาเมอร์ ทศกัณท์|A|BT11-042|4|3|G|ยักษ์|||1||
+อาเมอร์ ทศกัณท์|A|BT11-042|4|3|G|ยักษ์|||1|SCR|
+อาเมอร์ ทศกัณฐ์|A|BT11-042|4|3|G|ยักษ์|||1|PR|
+อาเมอร์ ทศกัณฐ์|A|BT11-042|4|3|G|ยักษ์|||1|CBR|
+พิเภก|A|BT11-043|3|3|G|ยักษ์|||2||
+มาดามทาบิ|A|BT11-044|4|2|G|สัตว์|||2||
+โคลัมแบงค์|A|BT11-045|3|4|G|คน|||0||
+ดยุกแห่งภาคีมะม่วง|A|BT11-046|6|4|G|ต้นไม้|||2||
+พระถังซัมจั๋ง|A|BT11-047|4|0|G|ต่างชาติ|||4||
+พระถังซัมจั๋ง|A|BT11-047|4|0|G|ต่างชาติ|||4|SCR|
+นักท่องเรื่องราว มายา|A|BT11-048|4|3|G|ต่างชาติ|||2||
+นักท่องเรื่องราว มายา|A|BT11-048|4|3|G|ต่างชาติ|||2|SCR|
+มายา เรื่องราว เทพเจ้าสายฟ้า|A|BT11-049|6|3|G|หุ่นยนต์|||1||
+คนเช็ดโต๊ะอัศวินโต๊ะกลม|A|BT11-050|0|0|R|ต่างชาติ|||4||
+อีสานสลิงเกอร์ ไก่ไข่|A|BT11-051|4|4|P|สัตว์วิเศษ|||3||
+โอเปอเรชั่น : สเกาท์|M|BT11-052|0|||ทหาร|N||||
+โอเปอเรชั่น : รอยัล|M|BT11-053|2|||ทหาร|N||||
+แยกกันไปแตก|M|BT11-054|0|||คน|N|D|||
+Cross Vaccine|M|BT11-055|2|||หุ่นยนต์|N||||
+พระไตรปิฎก|M|BT11-056|0|||จอมเวทย์|N|1|||3
+พระไตรปิฎก|M|BT11-056|0|||จอมเวทย์|N|1||SCR|3
+สู่โลกอันเปล่งประกาย!|M|BT11-057|2|||จอมเวทย์|N||||
+ระเบิดความเกลียดชัง|M|BT11-058|0|||จอมเวทย์|N||||
+อินสตอล บึ้มทั้งไดรฟ์|M|BT11-059|2|||ไซเบอร์|N||||
+ไฮแจ็ค ไฮรีเทิร์น|M|BT11-060|1|||ไซเบอร์|R||||
+ให้ข้าวฉันถ้าคุณเป็นคนดี|M|BT11-061|0|||จอมเวทย์|R||||
+เหตุผลที่ยังหายใจ|M|BT11-062|1|||จอมเวทย์|R||||
+ทำไมถึงเอาแต่ดูละครับ ?!|M|BT11-063|3|||จอมเวทย์|R||||
+ทำไมถึงเอาแต่ดูละครับ ?!|M|BT11-063|3|||จอมเวทย์|R|||SCR|
+ดาบแห่งแสงอรุณ & นัทคาลิเบอร์|M|BT11-064|2|||จอมเวทย์|M||||
+อาวุธนคร ปืนพกงูเห่า|M|BT11-065|1|||หุ่นยนต์|M||||
+อาวุธนคร ลูกซองจุ้ย|M|BT11-066|1|||หุ่นยนต์|M||||
+อาวุธนคร ลูกซองจุ้ย|M|BT11-066|1|||หุ่นยนต์|M|||SCR|
+อาวุธนคร ดินสอ 5H|M|BT11-067|1|||ต้นไม้|M||||
+หนึ่งเดียวเพื่อทุกอย่าง|M|BT11-068|0|||จอมเวทย์|M|1|||
+มัลแวร์โซน|M|BT11-069|2|||ไซเบอร์|L||||
+มะม่วงดราชิลด์|M|BT11-070|2|||ต้นไม้|L||||
+มะม่วงดราชิลด์|M|BT11-070|2|||ต้นไม้|L|||SCR|
+โรงเรียนฝึกหน่วยรบ|M|BT11-071|2|||ทหาร|L||||
+นครทิเนนทอล|C|BT11-072|6|10|R|สิ่งก่อสร้าง||1|3||
+รูปประจำบ้าน|C|BT11-073|4|6|B|คน|||0||
+แป้นสกุล อิเล็กทรอนิกส์|C|BT11-074|4|1|G|คน|||4||
+อ่อ เปอร์ลา|L|BT11-075|||||||||
+พระอิศวร เทพผู้ทำลาย|A|CC01-001|8|7|R|เทพ||1|1||
+พระอิศวร เทพผู้ทำลาย|A|CC01-001|8|7|R|เทพ||1|1|SCR|
+พระนารายณ์ เทพผู้พิทักษ์|A|CC01-002|8|8|R|เทพ|||1||
+พระนารายณ์ เทพผู้พิทักษ์|A|CC01-002|8|8|R|เทพ|||1|SCR|
+พระพรหม เทพผู้สร้าง|A|CC01-003|8|6|R|คน||1|2||
+พระพรหม เทพผู้สร้าง|A|CC01-003|8|6|R|คน||1|2|SCR|
+พระอินทร์ เทพขยัน|A|CC01-004|3|2|R|เทพ|||2||
+ปื๊ดเปรตกังฟู|A|CC01-005|5|3|R|เปรต|||2||
+ไตรตัน เจ้าสมุทร|A|CC01-006|6|6|B|เทพ||1|2||
+ไตรตัน เจ้าสมุทร|A|CC01-006|6|6|B|เทพ||1|2|SCR|
+วีรบุรุษสุดซอย|A|CC01-007|6|5|B|คน|||3||
+วีรบุรุษสุดซอย|A|CC01-007|6|5|B|คน|||3|SCR|
+คนอีสาน ยุคครีเตเชียส|A|CC01-008|4|2|B|คน|||2||
+ชู้รักรัททาทุย|A|CC01-009|3|1|B|รัททาทุย|||3||
+ชู้รักรัททาทุย|A|CC01-009|3|1|B|รัททาทุย|||3|SCR|
+ลุงบุญโชค|A|CC01-010|2|0|B|คน|||3||
+พญายม With The Shotgun|A|CC01-011|7|6|P|นรก|||3||
+พญายม With The Shotgun|A|CC01-011|7|6|P|นรก|||3|SCR|
+เฟรนชี่|A|CC01-012|2|1|P|ปลา|||1||
+เฟรนชี่|A|CC01-012|2|1|P|ปลา|||1|SCR|
+เจนนี่|A|CC01-013|2|3|P|หุ่นยนต์|||0||
+วูตาตู|A|CC01-014|5|3|P|ผี|||0||
+วูตาตู|A|CC01-014|5|3|P|ผี|||0|SCR|
+HR ผู้รู้ความจริง|A|CC01-015|3|2|P|คน|||3||
+แมวนิค|A|CC01-016|3|2|P|สัตว์|||1||
+ยักษ์หินแผ่นดินใหญ่|A|CC01-017|3|3|G|ยักษ์|||0||
+ยักษ์หินแผ่นดินใหญ่|A|CC01-017|3|3|G|ยักษ์|||0|SCR|
+เสามงคล ทรงจีน|A|CC01-018|3|2|G|ต้นไม้|||3||
+หมวดเงียบ ทหารรับจ้าง|A|CC01-019|4|3|G|คน|||2||
+หมวดเงียบ ทหารรับจ้าง|A|CC01-019|4|3|G|คน|||2|SCR|
+ผู้กองอึ่งอ่าง|A|CC01-020|3|3|G|คน|||1||
+ผู้กองอึ่งอ่าง|A|CC01-020|3|3|G|คน|||1|SCR|
+อินทรีย์แมน|A|CC01-021|3|3|R|คน|||1||
+อินทรีย์แมน|A|CC01-021|3|3|R|คน|||1|SCR|
+นนทก นิ้วเพชร|A|CC01-022|3|3|R|ยักษ์|||2||
+ตำรวจไซบอร์ค จ่าคอป|A|CC01-023|4|3|R|หุ่นยนต์|||1||
+ตำรวจไซบอร์ค จ่าคอป|A|CC01-023|4|3|R|หุ่นยนต์|||1|SCR|
+รัททาทุย|A|CC01-024|1|1|B|รัททาทุย|||1||50
+รัททาทุย|A|CC01-024|1|1|B|รัททาทุย|||1|SCR|50
+รัททาทุย พ่อพันธุ์|A|CC01-025|3|2|B|รัททาทุย|||2||
+รัททาทุย พ่อพันธุ์|A|CC01-025|3|2|B|รัททาทุย|||2|SCR|
+แมลงปอเลื่อยยนต์|A|CC01-026|3|3|B|แมลง|||2||
+แมลงปอเลื่อยยนต์|A|CC01-026|3|3|B|แมลง|||2|SCR|
+แมลงปอแจ็ค|A|CC01-027|3|2|B|แมลง|||3||
+นายนิรยบาล พ่อจีจ้า|A|CC01-028|4|3|P|นรก|||1||
+นายนิรยบาล แว่น|A|CC01-029|0|4|P|นรก|||1||
+นายนิรยบาล แว่น|A|CC01-029|0|4|P|นรก|||1|SCR|
+แบงค์ ผู้รู้ความจริง|A|CC01-030|2|2|P|คน|||1||
+เสามงคล|A|CC01-031|5|3|G|ต้นไม้|||2||
+ซินแส|A|CC01-032|3|3|G|คน|||3||
+จ่ามะนาว Tank Ranger|A|CC01-033|3|1|G|คน|||3||
+จ่ามะนาว Tank Ranger|A|CC01-033|3|1|G|คน|||3|SCR|
+จ่าแดงเดือด Tank Ranger|A|CC01-034|3|1|G|คน|||3||
+จ่าแดงเดือด Tank Ranger|A|CC01-034|3|1|G|คน|||3|SCR|
+เทวดาตัวเปิด|A|CC01-035|0|3|R|เทพ|||0||
+เทวดาตัวเปิด|A|CC01-035|0|3|R|เทพ|||0|SCR|
+ตึก|A|CC01-036|6|9|R|หุ่นยนต์|||4||
+ตึก|A|CC01-036|6|9|R|หุ่นยนต์|||4|SCR|
+เด็กไม่ชอบแมลงสาบ|A|CC01-037|0|3|B|คน|||0||
+ลูกค้าชาบู|A|CC01-038|2|2|B|คน|||4||
+ลูกค้าชาบู|A|CC01-038|2|2|B|คน|||4|SCR|
+จอมมังการ์ด|A|CC01-039|5|6|P|สัตว์|||1||
+จอมมังการ์ด|A|CC01-039|5|6|P|สัตว์|||1|SCR|
+จอมเวทย์ดำ|A|CC01-040|3|4|P|คน|||1||
+ไอ้หนุ่มรด.|A|CC01-041|1|0|G|คน|||3||
+ไอ้หนุ่มรด.|A|CC01-041|1|0|G|คน|||3|SCR|
+พรของอิศวร|M|CC01-042|1|||เทพ|N|1|||
+พรของอิศวร|M|CC01-042|1|||เทพ|N|1||SCR|
+รู้สึกเหมือนโดนแย่งเมีย|M|CC01-043|2|||เทพ|N||||
+ซ่อมบำรุงประจำปี|M|CC01-044|4|||ทหาร|N||||
+กฎร้าน|M|CC01-045|2|||จอมเวทย์|R||||
+ขอให้ทั้งตัวมีแต่---|M|CC01-046|0|||ฤษี|R||||
+ตุ๊กตางูพันคอ|M|CC01-047|1|||รัททาทุย|M||||
+น้ำซุปชาบู|M|CC01-048|2|||จอมเวทย์|M||||
+น้ำซุปชาบู|M|CC01-048|2|||จอมเวทย์|M|||SCR|
+Micro Plaza สะพานพลาสติก|M|CC01-049|1|||หุ่นยนต์|L||||
+SD Plaza สายเหนือเก่า|M|CC01-050|1|||หุ่นยนต์|L||||
+สมชายห้องเช่าพันล้าน|M|CC01-051|2|||จอมเวทย์|L||||
+อุบัติเหตุ!!!|M|CC01-052|1|||จอมเวทย์|R||||
+ไม้เกาหลัง|M|CC01-053|2|||รัททาทุย|M||||
+รถถังลงถนน|M|CC01-054|2|||ทหาร|N||||
+ถาดหลุม|M|CC01-055|2|||ทหาร|M||||
+ถาดหลุม|M|CC01-055|2|||ทหาร|M|||SCR|
+ความเจริญ|M|CC01-056|1|||จอมเวทย์|N||||
+ความเจริญ|M|CC01-056|1|||จอมเวทย์|N|||PR|
+เมตตาระยะยาว|M|CC01-057|0|||เทพ|N|1|||
+เมตตาระยะยาว|M|CC01-057|0|||เทพ|N|1||SCR|
+ริกกี้ นักปลอมแปลง|M|CC01-058|0|||แมลง|R||||
+ริกกี้ นักปลอมแปลง|M|CC01-058|0|||แมลง|R|||SCR|
+โรงบาล|M|CC01-059|2|||จอมเวทย์|L||||
+ประตูนรก|M|CC01-060|1|||นรก|L||||
+มหาราชาสีนิล|A|CC02-001|6|7|R|คน||1|2||
+มหาราชาสีนิล|A|CC02-001|6|7|R|คน||1|2|SCR|
+บัมเบิ้ลแบงค์|A|CC02-002|3|2|R|หุ่นยนต์|||0||
+บัมเบิ้ลแบงค์|A|CC02-002|3|2|R|หุ่นยนต์|||0|SCR|
+คุณโดม ผู้จัดการทีมการ์ด|A|CC02-003|4|3|R|คน|||2||
+นักดาบตะวันแดง|A|CC02-004|5|5|R|คน|||2||
+นักดาบตะวันแดง|A|CC02-004|5|5|R|คน|||2|SCR|
+หมีบราซิล|A|CC02-005|4|2|R|ต่างชาติ|||3||
+ซุส เทพเจ้าสูงสุดแห่งโอลิมปัส|A|CC02-006|7|6|B|เทพ||1|2||
+ซุส เทพเจ้าสูงสุดแห่งโอลิมปัส|A|CC02-006|7|6|B|เทพ||1|2|SCR|
+ไอ้ชนหมา|A|CC02-007|3|2|B|คน|||3||
+ลุงน้อย พ่อค้าไก่ย่าง|A|CC02-008|3|1|B|คน|||2||
+ลุงน้อย พ่อค้าไก่ย่าง|A|CC02-008|3|1|B|คน|||2|SCR|
+บึงทมิฬ  People - คุณปลาชด|A|CC02-009|6|4|B|ปลา|||1||
+บึงทมิฬ  People - คุณปลาชด|A|CC02-009|6|4|B|ปลา|||1|SCR|
+หมีขาว|A|CC02-010|4|2|B|ต่างชาติ|||3||
+ตุตันคาเมน ฟาโรห์ทองคำ|A|CC02-011|5|2|P|ต่างชาติ||1|2||
+ตุตันคาเมน ฟาโรห์ทองคำ|A|CC02-011|5|2|P|ต่างชาติ||1|2|SCR|
+เตียวเสียน จันทร์หลบโฉมสุดา|A|CC02-012|2|1|P|ต่างชาติ|||4||
+เตียวเสียน จันทร์หลบโฉมสุดา|A|CC02-012|2|1|P|ต่างชาติ|||4|SCR|
+ตั๋งโต๊ะ ขุนพลฮ่องเต้ทรราช|A|CC02-013|4|5|P|ต่างชาติ|||0||
+ตั๋งโต๊ะ ขุนพลฮ่องเต้ทรราช|A|CC02-013|4|5|P|ต่างชาติ|||0|SCR|
+แร้งทึ้งศพ|A|CC02-014|2|2|P|สัตว์|||1||
+หมีดำ|A|CC02-015|4|2|P|ต่างชาติ|||3||
+อินาริ โอคามิ แห่งการเก็บเกี่ยว|A|CC02-016|6|0|G|เทพ||1|4||
+อินาริ โอคามิ แห่งการเก็บเกี่ยว|A|CC02-016|6|0|G|เทพ||1|4|SCR|
+มอร์ฟีน Overdose|A|CC02-017|6|7|G|หุ่นยนต์||1|4||
+มอร์ฟีน Overdose|A|CC02-017|6|7|G|หุ่นยนต์||1|4|SCR|
+หุ่นพิฆาต 300%|A|CC02-018|3|3|G|หุ่นยนต์|||2||
+ราชาใบก้อน|A|CC02-019|5|2|G|ต่างชาติ|||3||
+ราชาใบก้อน|A|CC02-019|5|2|G|ต่างชาติ|||3|SCR|
+หมีเหลือง|A|CC02-020|4|2|G|ต่างชาติ|||3||
+ปื้ด เด็กเปรต|A|CC02-021|4|0|R|เปรต|||0||
+คนรวย|A|CC02-022|5|1|R|คน|||4||
+คนรวย|A|CC02-022|5|1|R|คน|||4|SCR|
+นางอัปสร|A|CC02-023|4|3|R|เทพ|||1||
+จอมหักกระดูก|A|CC02-024|6|5|R|เอเลี่ยน|||2||
+โจอี้ นักบอลขาหัก|A|CC02-025|0|0|R|ต่างชาติ|||4||
+โจอี้ นักบอลขาหัก|A|CC02-025|0|0|R|ต่างชาติ|||4|SCR|
+ซันนี่|A|CC02-026|2|2|B|คน|||4||
+จ่างู อสรพิษพิฆาตจักรกล|A|CC02-027|4|3|B|คน|||1||
+ไดโนกาฬสินธุ์ - กินรีมิมัส|A|CC02-028|3|3|B|กะปอม|||2||
+ไดโนกาฬสินธุ์ - กินรีมิมัส|A|CC02-028|3|3|B|กะปอม|||2|SCR|
+ริกกี้ คุณตาใจดี|A|CC02-029|4|4|B|แมลง|||2||
+มนุษย์รัททาทุย|A|CC02-030|4|1|B|รัททาทุย|||1||
+มนุษย์รัททาทุย|A|CC02-030|4|1|B|รัททาทุย|||1|SCR|
+บอสทุเรียน|A|CC02-031|0|0|B|ต้นไม้|||4||
+บอสทุเรียน|A|CC02-031|0|0|B|ต้นไม้|||4|SCR|
+ศาลพระภูมิ|A|CC02-032|4|2|P|ผี|||1||
+สารวัตร ตำรวจสัมภเวสี|A|CC02-033|4|4|P|ผี|||1||
+แดรกคูลา|A|CC02-034|6|4|P|ผี||1|2||
+แดรกคูลา|A|CC02-034|6|4|P|ผี||1|2|SCR|
+Ecycle|A|CC02-035|2|2|P|หุ่นยนต์|||3||
+Ecycle|A|CC02-035|2|2|P|หุ่นยนต์|||3|SCR|
+วิไลวรรณ แม่แบงค์|A|CC02-036|0|0|P|คน|||4||
+วิไลวรรณ แม่แบงค์|A|CC02-036|0|0|P|คน|||4|SCR|
+รถถัง B66 - เอ็กซ์เซลเซอร์|A|CC02-037|4|5|G|หุ่นยนต์|||1||
+รถถัง B66 - เอ็กซ์เซลเซอร์|A|CC02-037|4|5|G|หุ่นยนต์|||1|SCR|
+พาลี|A|CC02-038|7|4|G|สัตว์|||2||
+พญายักษ์ ทศกัณฐ์|A|CC02-039|4|5|G|ยักษ์|||1||
+พญายักษ์ ทศกัณฐ์|A|CC02-039|4|5|G|ยักษ์|||1|SCR|
+วีรชนชีวภาพ|A|CC02-040|0|0|G|คน|||4||
+วีรชนชีวภาพ|A|CC02-040|0|0|G|คน|||4|SCR|
+มรดกของพระอิศวร|M|CC02-041|1|||เทพ|N||||
+หนังสือเอาตัวรอดของกุ่ย|M|CC02-042|1|||คน|N||||
+หมอนข้างมฤตยูเทวี|M|CC02-043|1|||นรก|N||||
+ใบรับสมัครพนักงานลงกา|M|CC02-044|1|||ยักษ์|N||||
+สิงสู่เพื่อสู่สม|M|CC02-045|0|||จอมเวทย์|N||||
+กาจอก|M|CC02-046|2|||เทพ|R||||
+กาจอก|M|CC02-046|2|||เทพ|R|||SCR|
+เราจะตายแล้วท่านหยุดเถอะ|M|CC02-047|2|||จอมเวทย์|R||||
+ปืนจักรวุทธ|M|CC02-048|0|||เทพ|M|1|||
+ปืนจักรวุทธ|M|CC02-048|0|||เทพ|M|1||SCR|
+ดินแดนแห่งความหลากหลาย|M|CC02-049|3|||สัตว์วิเศษ|L||||
+วิหารเจ้าสมุทร|M|CC02-050|2|||ปลา|L||||
+วิหารเจ้าสมุทร|M|CC02-050|2|||ปลา|L|||SCR|
+ช่วยโลกใบนี้ไว้|M|CC02-051|4|||เปรต|N||||
+จมน้ำ|M|CC02-052|1|||จอมเวทย์|N||||
+ล้มโต๊ะ|M|CC02-053|1|||จอมเวทย์|N||||
+ล้มโต๊ะ|M|CC02-053|1|||จอมเวทย์|N|||SCR|
+เอากล้วยมานี่ย์ !!!!!!|M|CC02-054|3|||จอมเวทย์|R||||
+เอากล้วยมานี่ย์ !!!!!!|M|CC02-054|3|||จอมเวทย์|R|||SCR|
+งับ|M|CC02-055|1|||กะปอม|R||||
+เหน็บกินมือ|M|CC02-056|1|||จอมเวทย์|R||||
+เหน็บกินมือ|M|CC02-056|1|||จอมเวทย์|R|||SCR|
+แผนการ : แกงส้มตะปูเสียบ|M|CC02-057|1|||จอมเวทย์|M||||
+ขวานทอง|M|CC02-058|2|||เทพ|M||||
+เขาไกรลาสเอียง|M|CC02-059|1|||เทพ|L||||
+มวยทะเลลลลลล|M|CC02-060|1|||ฤษี|L||||
+มวยทะเลลลลลล|M|CC02-060|1|||ฤษี|L|||SCR|
+ชายจากอนาคต|M|CC02-061|0|||จอมเวทย์|N|||PR|
+ทาโกะซัง สูตรสวรรค์|A|ODY1-001|3|4|R|เทพ|||0||
+ทาโกะซัง สูตรมนุษย์|A|ODY1-002|2|2|B|คน|||2||
+ทาโกะซัง สูตรนรก|A|ODY1-003|4|3|P|นรก|||1||
+ทาโกะจัง พนักงานดีเด่น|A|ODY1-004|4|1|B|ปลา|||3||
+โอเดนย่ากาย|A|ODY1-005|3|5|R|เอเลี่ยน|||2||
+พระอิศวร|A|ODY1-006|6|5|R|เทพ|||2||
+นนทก นิ้วเพชร|A|ODY1-007|3|2|R|ยักษ์|||2||
+พระเวสสุกรรม|A|ODY1-008|4|3|R|เทพ|||1||
+ปื้ด เด็กเปรต|A|ODY1-009|4|0|R|เปรต|||0||
+หนุมาน|A|ODY1-010|4|3|R|สัตว์|||1||
+ชาวบ้านขายน้ำ|A|ODY1-011|3|2|R|คน|||2||
+แม่กบ|A|ODY1-012|3|1|R|สัตว์|||1||
+วันชัย พ่อบุญลือ|A|ODY1-013|5|1|R|คน|||2||
+กัญญา แม่บุญลือ|A|ODY1-014|3|2|R|คน|||2||
+พระอินทร์|A|ODY1-015|2|2|R|เทพ|||2||
+นนทก|A|ODY1-016|1|1|R|ยักษ์|||2||
+รัททาทุย นางพญา|A|ODY1-017|2|4|B|รัททาทุย||1|2||
+รัททาทุย พ่อพันธุ์|A|ODY1-018|3|2|B|รัททาทุย|||2||
+รัททาทุย|A|ODY1-019|1|1|B|รัททาทุย|||1||50
+แมลงปอเลื่อยยนต์|A|ODY1-020|3|3|B|แมลง|||2||
+ลูกแม่ศรีนวล|A|ODY1-021|2|1|B|สัตว์|||2||
+พ่อบุญใหญ่|A|ODY1-022|3|2|B|สัตว์|||3||
+จ่ามะนาว|A|ODY1-023|3|4|B|คน|||2||
+แมลงปอแจ็ค|A|ODY1-024|3|2|B|แมลง|||3||
+เอเลี่ยนแสงสีฟ้า|A|ODY1-025|3|2|B|เอเลี่ยน|||1||
+ริกกี้ เพื่อนรัก|A|ODY1-026|3|1|B|แมลง|||2||
+สุวรรณ|A|ODY1-027|3|2|P|นรก|||2||
+ทศกัณฑ์ยักษ์ที่---เมียพระอิศวร|A|ODY1-028|4|5|P|เอเลี่ยน||1|3||
+ศาลพระภูมิ|A|ODY1-029|4|2|P|ผี|||1||
+นายนิรยบาล "เต๋า"|A|ODY1-030|3|3|P|นรก|||2||
+นีโม่|A|ODY1-031|0|0|P|คน|||3||
+ยมทูต|A|ODY1-032|3|3|P|นรก|||2||
+สารวัตร ตำรวจสัมภเวสี|A|ODY1-033|4|4|P|ผี|||1||
+แรงงานทาสออฟฟิศ|A|ODY1-034|1|4|P|คน|||3||
+กัปตัน ไกร|A|ODY1-035|4|1|P|คน|||2||
+นายนิรยบาล พ่อจีจ้า|A|ODY1-036|4|3|P|นรก|||1||
+เด็กหนวด โอเดนย่า|A|ODY1-037|2|2|B|คน|||4||
+กัปตันโซเดียม|A|ODY1-038|1|3|P|คน|||2||
+ตึก|A|ODY1-039|6|9|R|หุ่นยนต์||1|4||
+พี่โด 2.0|A|ODY1-040|8|8|R|หุ่นยนต์|||2||
+ลูกกบ|A|ODY1-041|1|1|R|สัตว์|||1||
+เทวดาตำรวจ|A|ODY1-042|2|2|R|เทพ|||2||
+ช่างแอร์ดวงซวย|A|ODY1-043|0|0|R|เทพ|||4||
+เทวดาแบงค์|A|ODY1-044|1|4|R|เทพ|||0||
+ลูกค้าชาบู|A|ODY1-045|2|2|B|คน|||4||
+เจ้าของร้านชาบู|A|ODY1-046|1|1|B|คน|||2||
+ครูวีรชัย|A|ODY1-047|1|1|B|คน|||3||
+จ่าแดงเดือด|A|ODY1-048|4|4|B|คน|||2||
+ครูภาษาไทย|A|ODY1-049|0|0|B|คน|||4||
+เด็กไม่ชอบแมลงสาบมากๆ|A|ODY1-050|1|4|B|คน|||0||
+รัททาทุย ผู้พิทักษ์ราชีนี|A|ODY1-051|5|5|B|รัททาทุย|||3||
+เฟนริล|A|ODY1-052|5|5|P|สัตว์|||3||
+จอมมังการ์ด|A|ODY1-053|5|6|P|สัตว์|||1||
+นายนิรยบาล ตัวใหญ่พิเศษ|A|ODY1-054|9|3|P|นรก|||4||
+แบงค์ เทคนิคประทุมทู|A|ODY1-055|4|4|P|คน|||2||
+นายนิรยบาล ปฎิรูป|A|ODY1-056|1|1|P|นรก|||4||
+นายนิรยบาล ชาวนา|A|ODY1-057|2|3|P|นรก|||3||
+นายนิรยบาล กล้าม|A|ODY1-058|4|4|P|นรก|||3||
+กาลจักร|A|ODY1-059|3|3|G|ยักษ์|||1||
+โลทัน|A|ODY1-060|2|3|G|ยักษ์|||2||
+มหิตัน|A|ODY1-061|3|3|G|ยักษ์|||3||
+พัทธกาล|A|ODY1-062|0|3|G|ยักษ์|||0||
+เอาแค่การ์ด !!!|M|ODY1-063|2|||จอมเวทย์|N||||
+โอเดนย่า อร่อยมัก|M|ODY1-064|3|||จอมเวทย์|N||||
+ถุงเกราะโอเดนย่า|M|ODY1-065|1|||จอมเวทย์|N||||
+ดาว O.D.Y 88|M|ODY1-066|1|||หุ่นยนต์|N||||
+เมตตาระยะยาว|M|ODY1-067|0|||เทพ|N|1|||
+ความเจริญ|M|ODY1-068|1|||จอมเวทย์|N||||
+ชายจากอนาคต|M|ODY1-069|0|||จอมเวทย์|R||||
+ริกกี้ นักปลอมแปลง|M|ODY1-070|0|||แมลง|R||||
+ตีแม่|M|ODY1-071|2|||คน|M||||
+ตีพ่อ|M|ODY1-072|3|||คน|M||||
+หมอมาแล้วววว|M|ODY1-073|3|||จอมเวทย์|R||||
+โรงบาล|M|ODY1-074|2|||จอมเวทย์|L||||
+น้ำแดง|M|ODY1-075|1|||จอมเวทย์|M||||
+ไม้เกาหลัง|M|ODY1-076|2|||รัททาทุย|M||||
+หอกแหลมแทงทุกวัน ทุกวัน|M|ODY1-077|1|||นรก|M||||
+เพื่อลูกค้า|M|ODY1-078|1|||จอมเวทย์|N||||
+น้ำชูกำลัง|M|ODY1-079|1|||จอมเวทย์|M||||
+รั้วของชาติ|M|ODY1-080|2|||จอมเวทย์|M||||
+เขาไกรลาสเอียง|M|ODY1-081|1|||เทพ|L||||
+ทุ่งนาแดนนี้(ไม่มีความหมาย)|M|ODY1-082|2|||จอมเวทย์|L||||
+มวยทะเลลลลลล|M|ODY1-083|1|||ฤษี|L||||
+เจ้ากล้าดียังไง|M|ODY1-084|2|||เทพ|R||||
+ประมาทร่วม|M|ODY1-085|1|||จอมเวทย์|N||||
+ความกล้าหาญ|M|ODY1-086|4|||จอมเวทย์|N||||
+เคี้ยวเพื่อนเธอซะ|M|ODY1-087|3|||สัตว์|R||||
+ความยุติธรรมสำหรับนนทก|M|ODY1-088|1|||จอมเวทย์|N||||
+บำเพ็ญประโยชน์|M|ODY1-089|1|||จอมเวทย์|N||||
+กระทะทองแดง|M|ODY1-090|1|||นรก|L||||
+ผู้เล่นยุคแรก|A|PRE0-001|3|2|P|คน||L|2||
+น้ำใจ|M|PRE0-001-2|1|||จอมเวทย์|M||||
+ผู้เล่นภักดี|A|PRE0-002|3|2|B|คน||L|2||
+ผู้เล่นเหลี่ยม|A|PRE0-003|4|4|G|คน||L|4||
+ผู้เล่นจำไม|A|PRE0-004|5|5|G|คน||L|4||
+ผู้เล่นมั่ว|A|PRE0-005|2|2|R|นรก|||2||
+ผู้เล่นโซเชียล|A|PRE0-005-2|5|3|P|คน|||1||
+รัททาทุย|A|PRMO-001|1|1|B|รัททาทุย|||1||50
+นายนิรยบาล ปฎิรูป|A|PRMO-002|1|1|P|นรก|||4||
+อุบัติเหตุ!!!|M|PRMO-003|1|||จอมเวทย์|R||||
+น้ำชูกำลัง|M|PRMO-004|1|||จอมเวทย์|M||||
+ไม้เกาหลัง|M|PRMO-005|2|||รัททาทุย|M||||
+ลูกแม่ศรีนวล|A|PRMO-006|2|1|B|สัตว์|||2||
+ตีพ่อ|M|PRMO-007|3|||คน|M||||
+ตีแม่|M|PRMO-008|2|||คน|M||||
+พระอิศวร|A|PRMO-009|6|5|R|เทพ|||2||
+ช่วยโลกใบนี้ไว้|M|PRMO-010|1|||เปรต|N||||
+มีมมิจัง ไอดอลหน้าใหม่|A|PRMO-011|4|2|B|คน|||2||
+แบงค์ ผู้รู้ความจริง|A|PRMO-012|2|2|P|คน|||1||
+สตีฟ Tank Ranger|A|PRMO-013|3|1|G|คน|||3||
+ฉุบสั่งตาย|M|PRMO-014|1|||จอมเวทย์|N||||
+อรุณีย์ ข้าวมันไก่เมียจ่า|A|PRMO-015|0|0|G|คน|||4||
+เอเลี่ยนแสงสีฟ้า|A|PRMO-016|3|2|B|เอเลี่ยน|||1||
+เสามงคล|A|PRMO-017|5|3|G|ต้นไม้|||2||
+ไอ นีด เมดิก|M|PRMO-018|4|||จอมเวทย์|N||||
+ความเจริญ|M|PRMO-019|1|||จอมเวทย์|N||||
+พญายม|A|PRMO-020|5|5|P|นรก|||1||
+ใบดำใบแดง|M|PRMO-021|1|||ทหาร|N||||
+พระอินทร์|A|PRMO-022|2|2|R|เทพ|||2||
+พี่โด 2.0|A|PRMO-023|8|8|R|หุ่นยนต์|||2||
+แบมบูจัง ไอดอลสองขั้ว|A|PRMO-024|4|2|P|คน|||2||
+บัลเดอร์ เทพแสง แห่งแอสการ์ด|A|PRMO-025|4|4|P|เทพ|||1||
+ทหารอาณาจักรของแพง|A|PRMO-026|0|0|G|คน|||2||
+พระนารายณ์|A|PRMO-027|4|4|R|เทพ|||1||
+ไม่เจ้ายังไม่พร้อม|M|PRMO-028|2|||ฤษี|R||||
+แบ่งแยกดินแดน|M|PRMO-029|1|||จอมเวทย์|L||||
+บึงทมิฬ  People - CEO คุณจิระ|A|PRMO-030|4|2|B|ปลา|||3||
+ปราสาทแดรก|M|PRMO-031|2|||ผี|L||||
+นางอัปสร|A|PRMO-032|4|3|R|เทพ|||1||
+เทอราโนดอน จากต่างแดน|A|PRMO-033|3|2|B|กะปอม|||2||
+หมานมเย็น|A|PRMO-034|3|2|B|สัตว์|||1||
+หมอมาแล้วววว|M|PRMO-035|3|||จอมเวทย์|R||||
+น้องสาม ผู้รู้ความจริง|A|PRMO-036|3|1|P|คน|||2||
+โทมาโทจัง ไอดอลเด็กน้อย|A|PRMO-037|2|1|R|คน|||2||
+รถถัง "Tank Ranger"|A|PRMO-038|4|4|G|หุ่นยนต์|||2||
+หมู่บ้านพอดี|M|PRMO-039|2|||จอมเวทย์|L||||
+เมียพระอิศวร|A|PRMO-040|3|5|R|เทพ||1|4||
+ขวานเงิน|M|PRMO-041|2|||คน|M||||
+ครูภาษาไทย|A|PRMO-042|0|0|B|คน|||4||
+ไดโนกาฬสินธุ์ - ภูเวียงสิรินเน|A|PRMO-043|4|4|B|กะปอม|||2||
+ร้อนมากก็เปิดหน้าต่างสิว๊ากกกก|M|PRMO-044|2|||จอมเวทย์|N||||
+ทุ่งนาแดนนี้(ไม่มีความหมาย)|M|PRMO-045|2|||ต้นไม้|L||||
+นายนิรยบาล กล้าม|A|PRMO-046|4|4|P|นรก|||3||
+บรุนฮิลด์  เทพธิดาแห่งวัลฮัลลา|A|PRMO-047|3|2|P|เทพ|||2||
+แมว-น้ำมะลิ|A|PRMO-048|2|2|B|สัตว์|||1||
+คุณเชิดชัย Super Air|A|PRMO-049|2|2|G|คน|||1||
+โรงบาล|M|PRMO-050|2|||จอมเวทย์|L||||
+บึงทมิฬ|M|PRMO-051|1|||ปลา|N||||
+แม่นาค พระปะแดง|A|PRMO-052|3|2|P|ผี|||1||
+เด็กไม่ชอบแมลงสาบ|A|PRMO-053|0|3|B|คน|||0||
+หมาแพนดี้|A|PRMO-054|2|2|R|สัตว์|||2||
+รัททาทุย ผู้พิทักษ์ราชินี|A|PRMO-055|5|5|B|รัททาทุย|||3||
+ชายจากอนาคต|M|PRMO-056|0|||จอมเวทย์|R||||
+อีช่า - สาวน้อยคนเก่ง|A|PRMO-0562|3|1|R|คน|||2||
+แมวมัทฉะ|A|PRMO-057|1|3|G|สัตว์|||1||
+บึงทมิฬ  People - คุณดีไมส์|A|PRMO-058|6|4|B|ปลา|||2||
+บีมมมมมมมมมม|M|PRMO-059|2|||เทพ|N||||
+มีมมิ ผู้ร่วงหล่น|A|PRMO-060|4|2|P|ผี|||2||
+อามัส มนุษย์ดาว R18|A|PRMO-061|3|0|B|เอเลี่ยน|||3||
+สหายหุ่นผู้กล้า โฟเบีย|A|PRMO-062|3|0|R|ต่างชาติ|||2||
+นางลักษมี|A|PRMO-063|1|1|R|เทพ|||4||
+ทัตดนัยซัง โปรดิวเซอร์มือทอง|A|PRMO-064|6|3|P|คน||1|2||
+กุ่ย|A|PRMO-065|2|2|B|คน|||2||
+ฮอล|A|PRMO-066|2|2|B|คน|||2||
+นาย|A|PRMO-067|2|2|B|คน|||2||
+เจ้ากล้าดียังไง|M|PRMO-068|2|||เทพ|R||||
+เอาไปอยู่ด้วย|M|PRMO-069|2|||ผี|R||||
+จอมเวทย์ดำ|A|PRMO-070|3|4|P|คน|||1||
+เฟรย่า แม่ทุกสถาบันแอสการ์ด|A|PRMO-071|4|3|P|เทพ|||3||
+จอย มนุษย์ดาว R18|A|PRMO-072|4|2|B|เอเลี่ยน|||2||
+จาบับวา|A|PRMO-073|4|4|P|ต่างชาติ|||0||
+หุ่นนักรบผู้กล้า : โปรโตไมเกรน|A|PRMO-074|4|3|R|หุ่นยนต์|||2||
+แมลงปอแจ๊ค|A|PRMO-075|3|2|B|แมลง|||3||
+ชาช่าจัง ไอดอลคนเก่ง|A|PRMO-076|4|6|B|คน|||2||
+จ่ายุทธ Tank Ranger|A|PRMO-077|3|1|G|คน|||3||
+หุ่นนักรบผู้กล้า ไมเกรน|A|PRMO-078|5|4|R|หุ่นยนต์|||2||
+ศาลพระภูมิ|A|PRMO-079|4|2|P|ผี|||1||
+เลอติ๊ก เด็กไม่ชอบแดรคคูลา|A|PRMO-083|3|3|P|ต่างชาติ|||1||
+หมาชาไทย|A|PRMO-084|2|0|P|สัตว์|||3||
+เบดิเวียร์ อัศวินโต๊ะกลมแห่งความภักดี|A|PRMO-085|3|3|R|ต่างชาติ|||2||
+ตุ๊กตารัททาทุย|A|PRMO-086|1|0|B|รัททาทุย|||3||
+ไอ้นัท - คนใจเด็ด|A|PRMO-087|1|3|R|คน|||2||
+รถถัง A003|A|PRMO-088|0|3|G|หุ่นยนต์|||0||
+พลทหารหิมะ|A|PRMO-089|2|2|B|ต่างชาติ|||2||12
+คาถา ปลดอาวุสสิวะ|M|PRMO-090|3|||จอมเวทย์|N||||
+กวนอู ขุนพลภักดีแห่งจ๊กก๊ก|A|PRMO-091|4|4|G|ต่างชาติ|||1||
+เตียวหุย ขุนพลจอมบุกแห่งจ๊กก๊ก|A|PRMO-092|5|4|G|ต่างชาติ|||2||
+ชาโค่ล Overdose|A|PRMO-094|5|4|G|หุ่นยนต์|||0||
+ขวาน 7 สี|M|PRMO-095|2|||จอมเวทย์|M||||
+ลิโป้ ขุนพลเทพสงคราม|A|PRMO-096|8|7|P|ต่างชาติ||1|0||
+ไม่นะโอคุง!!|L|PRMO-097|||||||||
+ไม่นะฟุจัง!!|L|PRMO-098|||||||||
+อย่าให้มีครั้งที่ 2|M|PRMO-100|1|||จอมเวทย์|R||||
+เลือกมันสำหรับพวก จน !!!|M|PRMO-101|1|||จอมเวทย์|N||||
+ซุนเซ็ก ขุนพลไฟแรงแห่งง่อก๊ก|A|PRMO-102|3|2|R|ต่างชาติ|||2||
+ดินแดนหิมะสีเทา|M|PRMO-103|2|||ต่างชาติ|L||||
+ค่ายบางระจัน|C|PRMO-104|4|6|R|สิ่งก่อสร้าง|||0||
+อุบัติเหตุ!!!|M|PRMO-119|1|||จอมเวทย์|R||||
+ทองเหม็น ขวานคลั่ง|A|PRMO-105|4|4|R|คน|||2||
+ตำรวจไฟแรง เอนโว่|A|PRMO-106|5|4|G|คน|||1||
+Skill : Full Drive|M|PRMO-107|0|||จอมเวทย์|N||||
+กุมภกรรณ ทดน้ำ|A|PRMO-115|6|3|G|ยักษ์|||2||
+อัศวินแบงค์|A|PRMO-114|6|6|B|ต่างชาติ|||3||
+อีสานสลิงเกอร์ ปิ๊ก|A|PRMO-108|3|2|P|คน|||3||
+แมรี่ พนักงานต้อนรับ|A|PRMO-109|4|2|G|ต่างชาติ|||0||
+หนีคือยอดกลยุทธ์|M|PRMO-110|2|||จอมเวทย์|R||||
+พี่หน่วงเพชรฆาตโซเชียล|A|PRMO-118|4|2|P|คน|||1||
+ไม่นะ Judge!!!|L|PRMO-099|||||||||
+ไม่นะ ผู้เล่น TOP 32!|L|PRMO-080|||||||||
+อีสานสลิงเกอร์ ปิ่น|A|PRMO-093|3|2|P|คน|||2||
+โลกิ เจ้าชายยักษ์น้ำแข็ง|A|PRMO-111|4|0|P|เทพ|||4||
+เซนเซไฮ|A|PRMO-135|4|1|G|คน|||1||
+สไปรท์ ยอดสุนัข|A|PRMO-112|4|4|R|สัตว์|||2||
+จูล่ง ขุนพลสุภาพบุรุษแห่งจ๊กก๊ก|A|PRMO-113|6|5|G|ต่างชาติ|||2||
+ซีกรุน เทพธิดาแห่งวัลฮัลลา|A|PRMO-131|5|5|P|เทพ|||2||
+ผู้เจริญ นาย|A|PRMO-132|3|0|B|คน|||4||
+แหม่อ้ายก็~~~|M|PRMO-133|2|||จอมเวทย์|R||||
+พลังแฝง|M|PRMO-134|2|||จอมเวทย์|R||||
+รัททาทุย พาหะ|A|PRMO-136|1|1|B|รัททาทุย|||1||50
+ไดโนกาฬสินธุ์ - สัตยาซอรัส|A|PRMO-120|1|1|B|กะปอม|||2||
+ต้นมะม่วง|A|PRMO-121|4|2|G|ต้นไม้|||2||
+นางฟ้าลูกซอง|A|PRMO-122|2|2|R|เทพ|||0||
+ปลอกคอซื่อสัตย์|M|PRMO-129|4|||จอมเวทย์|M||||
+จอมเวทย์ กาลู|A|PRMO-130|3|2|P|ต่างชาติ|||3||
+ไปเลยมอนตี้|M|PRMO-157|1|||สัตว์|R||||
+ครุฑ เกล - ครุฑสัจจะ เจ้าแห่งแสง|A|PRMO-116|4|2|B|สัตว์วิเศษ|||3||
+ฉัพพยา นาคเกล็ดรุ้ง|A|PRMO-117|3|3|R|สัตว์วิเศษ|||2||
+ราชาหิมะ บิง|A|PRMO-123|10|6|B|ต่างชาติ|||2||
+ซาบะริว นักกวาดล้างมือเก๋า|A|PRMO-124|7|7|R|ต่างชาติ|||1||
+ยอดมนุษย์หัวยางลบ|A|PRMO-125|3|3|P|ต่างชาติ|||2||
+หอสมุดจอมเวทย์|C|PRMO-126|2|1||จอมเวทย์|||2||
+เซตาม่อน Overdose|A|PRMO-127|4|5|G|หุ่นยนต์|||2||
+เมย์ แวมไพร์โกธิค|A|PRMO-128|3|2|R|ผี|||3||
+ตัวอะไรสักอย่าง|A|PRMO-149|6|6|B|เอเลี่ยน|||1||
+พลเสบียง|A|PRMO-150|0|0|G|สัตว์|||4||
+ดยุกแห่งภาคีมะม่วง|A|PRMO-153-A|6|4|G|ต้นไม้|||2||
+ดยุกแห่งภาคีมะม่วง|A|PRMO-153-B|6|4|G|ต้นไม้|||2||
+เชาว์ปัญญาลิง - ชิงปัญญาเรา|M|PRMO-152|0|||สัตว์|R||||
+มาโกะ มารดาแห่งภาคีมะม่วง|A|PRMO-140|10|6|G|ต้นไม้||1|2||
+หมอเสริมศักดิ์|A|PRMO-139|3|2|R|คน|||1||
+ริน บันนี่เกิร์ล|A|PRMO-138|3|1|P|คน|||1||
+อู๊ด ประธานผู้รู้ความจริง|A|PRMO-137|4|1|P|คน|||2||
+นางมณโฑ|A|SL01-001|4|3|G|คน|||2||
+ทศกัณฐ์ยักษ์ที่---เมียพระอิศวร|A|SL01-002|4|5|P|ยักษ์||1|3||
+พระอิศวร|A|SL01-003|6|5|R|เทพ|||2||
+พระนารายณ์|A|SL01-004|4|4|R|เทพ|||1||
+พระอินทร์|A|SL01-005|2|2|R|เทพ|||2||
+พระพรหม|A|SL01-008|8|6|R|เทพ|||2||
+ชายจากอนาคต|M|SL01-006|0|||จอมเวทย์|R||||
+เลือกมันสำหรับพวก จน !!!|M|SL01-007|1|||จอมเวทย์|N||||
+อนันตวดี ราชินีแห่งนาค|A|SL02-001|1|1|R|สัตว์วิเศษ|||4||
+ครุฑเวนไตย เจ้ากำลัง|A|SL02-002|3|3|B|สัตว์วิเศษ|||2||
+เจค นักฆ่ามือเก๋า|A|SL02-003|4|6|B|ต่างชาติ|||1||
+เตียวเลี้ยว ขุนพลมือปราบแห่งวุยก๊ก|A|SL02-004|4|4|B|ต่างชาติ|||2||
+ง่อวซอรัส|A|SL02-005|5|5|B|กะปอม|||3||
+งี่เง่ากับงอแง|A|SL02-006|2|1|P|สัตว์|||0||
+อย่าให้มีครั้งที่ 2|M|SL02-007|1|||จอมเวทย์|R||||
+พลังแฝง|M|SL02-008|2|||จอมเวทย์|R||||
+เอรา นาคเกล็ดเขียว|A|SL02-009|2|1|R|สัตว์วิเศษ|||3||
+อนันต์ ราชาแห่งนาค|A|SL02-010|6|7|R|สัตว์วิเศษ||1|2||
+อะไรวะ !|M|KD00-00A|2|||จอมเวทย์|R||||
+เบียดเบียนผู้อื่น|M|KD00-00B|1|||นรก|N||||
+โอน้อยออกแห่งโชคชะตา|M|KD00-00C|1|||จอมเวทย์|N||||
+ขอมือเธอหน่อย~|M|KD00-00D|2|||จอมเวทย์|N||||
+พระนารายณ์ เทพผดุงธรรม|A|KD01-001|8|8|R|เทพ||1|0||
+พระนารายณ์ เทพผดุงธรรม|A|KD01-001|8|8|R|เทพ||1|0|SCR|
+พระนารายณ์ เทพผดุงธรรม|A|KD01-001|8|8|R|เทพ||1|0|PR|
+พระนารายณ์ เทพผดุงธรรม|A|KD01-001|8|8|R|เทพ||1|0|CBR|
+ร่างอวตารพระนารายณ์ - นรสิงห์|A|KD01-002|4|4|R|เทพ|||1||
+ร่างอวตารพระนารายณ์ - นรสิง|A|KD01-002|4|4|R|เทพ|||1|SCR|
+ร่างอวตารพระนารายณ์ - เกษียรสมุทร|A|KD01-003|3|3|R|เทพ|||2||
+ร่างอวตารพระนารายณ์ - เกษียรสมุทร|A|KD01-003|3|3|R|เทพ|||2|SCR|
+พระลักษมี|A|KD01-004|1|1||เทพ|||4||
+พระนารายณ์ เทพผู้พิทักษ์|A|KD01-005|8|8||เทพ|||1||
+พระนารายณ์|A|KD01-006|4|4||เทพ|||1||
+พระอินทร์ เทพขยัน|A|KD01-007|3|2|R|เทพ|||2||
+พระอินทร์ เทพขยัน|A|KD01-007|3|2||เทพ|||2|SCR|
+พระพรหม|A|KD01-008|8|6||เทพ|||2||
+นางอัปสร|A|KD01-009|4|3||เทพ|||1||
+หนุมาน|A|KD01-010|4|3||สัตว์|||2||
+เทวดาตัวเปิด|A|KD01-011|0|3||เทพ|||0||
+ช่างแอร์ดวงซวย|A|KD01-012|0|0|R|เทพ|||4||
+ช่างแอร์ดวงซวย|A|KD01-012|0|0||เทพ|||4|SCR|
+ความเจริญ|M|KD01-013|1|||จอมเวทย์|N||||
+ความกล้าหาญ|M|KD01-014|4|||จอมเวทย์|N||||
+เลือกมันสำหรับพวก จน !!!|M|KD01-015|1|||จอมเวทย์|N||||
+ขวานทอง|M|KD01-016|2|||จอมเวทย์|M||||
+อุบัติเหตุ!!!|M|KD01-017|1|||จอมเวทย์|R||||
+ไปเลยมอนตี้|M|KD01-018|1|||สัตว์|R||||
+เขาไกรลาส|M|KD01-019|2|||จอมเวทย์|L||||
+แอสการ์ดคือสถานที่ไม่ใช่ผู้คน|M|KD01-020|4|||เทพ|L||||
+ไม่นะ อิศวร !|L|KD01-021|||||||||
+ไม่นะ พระอินทร์ !|L|KD01-022|||||||||
+ไม่นะ นนทก !|L|KD01-023|||||||||
+ไม่นะ อัปสร !|L|KD01-024|||||||||
+ไม่นะ โดม !|L|KD01-025|||||||||
+ปีศาจแห่งพันรเลือด เมฟิสโตเฟเลส|A|KD02-001|8|7|P|นรก||1|2||
+ปีศาจแห่งพันรเลือด เมฟิสโตเฟเลส|A|KD02-001|8|7|P|นรก||1|2|SCR|
+ปีศาจแห่งพันรเลือด เมฟิสโตเฟเลส|A|KD02-001|8|7|P|นรก||1|2|PR|
+ปีศาจแห่งพันรเลือด เมฟิสโตเฟเลส|A|KD02-001|8|7|P|นรก||1|2|CBR|
+ลิลิธ ปีศาจสาวตนแรก|A|KD02-002|4|3|P|นรก|||2||
+ลิลิธ ปีศาจสาวตนแรก|A|KD02-002|4|3|P|นรก|||2|SCR|
+พญายม|A|KD02-003|5|5||นรก|||1||
+สุวรรณ|A|KD02-004|3|2||นรก|||2||
+นายนิรยบาล หมอ|A|KD02-005|4|2||นรก|||1||
+นายนิรยบาล พ่อจีจ้า|A|KD02-006|4|3||นรก|||1||
+นายนิรยบาล พ่อจีจ้า|A|KD02-006|4|3|P|นรก|||1|SCR|
+นายนิรยบาล แว่น|A|KD02-007|0|4||นรก|||1||
+นายนิรยบาล อ้วน|A|KD02-008|2|2||นรก|||2||
+นายนิรยบาล "เต๋า"|A|KD02-009|3|3||นรก|||2||
+นายนิรยบาล กล้าม|A|KD02-010|4|4||นรก|||3||
+นายนิรยบาล ปฎิรูป|A|KD02-011|1|1||นรก|||4||
+นายนิรยบาล ตัวใหญ่พิเศษ|A|KD02-012|9|3||นรก|||4||
+นายนิรยบาล ชาวนา|A|KD02-013|2|3||นรก|||3||
+สัญญาเลือด|M|KD02-014|0|||นรก|N||||
+สัญญาเลือด|M|KD02-014|0|||นรก|N|||SCR|
+ร้อนมากก็เปิดหน้าต่างสิว๊ากกกก|M|KD02-015|2|||จอมเวทย์|N||||
+เลือกมันสำหรับพวก จน !!!|M|KD02-016|1|||จอมเวทย์|N||||
+อย่าให้มีครั้งที่ 2|M|KD02-017|1|||จอมเวทย์|R||||
+ชายจากอนาคต|M|KD02-018|0|||จอมเวทย์|R||||
+หอกแหลมแทงทุกวัน ทุกวัน|M|KD02-019|1|||นรก|M||||
+ประตูนรก|M|KD02-020|1|||นรก|L||||
+ประตูนรก|M|KD02-020|1|||นรก|L|||SCR|
+ไม่นะ พญายม !|L|KD02-021|||||||||
+ไม่นะ โดม !|L|KD02-022|||||||||
+ไม่นะ มีมมิจัง !|L|KD02-023|||||||||
+ไม่นะ อู๊ด !|L|KD02-024|||||||||
+ไม่นะ ลูก !|L|KD02-025|||||||||
+มีมมิจัง ไอดอล No.1|A|KD03-001|6|4|B|คน||1|4||
+มีมมิจัง ไอดอล No.1|A|KD03-001|6|4|B|คน||1|4|SCR|
+มีมมิจัง ไอดอล No.1|A|KD03-001|6|4|B|คน||1|4|PR|
+มีมมิจัง ไอดอล No.1|A|KD03-001|6|4|B|คน||1|4|CBR|
+โอตะคูลา|A|KD03-002|4|1|P|ผี|||4||
+โอตะคูลา|A|KD03-002|4|1|P|ผี|||4|SCR|
+มีมมิจัง ไอดอลหน้าใหม่|A|KD03-003|4|2|B|คน|||2||
+มีมมิจัง ไอดอลหน้าใหม่|A|KD03-003|4|2|B|คน|||2|SCR|
+แบมบูจัง ไอดอลสองขั้ว|A|KD03-004|4|2||คน|||2||
+โทมาโทจัง ไอดอลเด็กน้อย|A|KD03-005|2|1||คน|||2||
+มยุราซัง  ไอดอลยุค 80|A|KD03-006|2|1||คน|||2||
+โอตะ รุ่นก่อตั้ง|A|KD03-007|1|0||คน|||4||
+โอตะปุส|A|KD03-008|1|1||ปลา|||2||
+โอตะตัวกะปอม|A|KD03-009|2|0||กะปอม|||4||
+วูตาตู|A|KD03-010|5|3||ผี|||0||
+แมลงปอแจ็ค|A|KD03-011|3|2||แมลง|||3||
+ความเจริญ|M|KD03-012|1|||จอมเวทย์|N||||
+เยี่ยวรดศาล|M|KD03-013|2|||ผี|N||||
+ตู้โชว์ไอดอล|M|KD03-014|2|||จอมเวทย์|N||||
+งานจับมือ|M|KD03-015|2|||จอมเวทย์|R||||
+งานจับมือ|M|KD03-015|2|||จอมเวทย์|R|||SCR|
+อุบัติเหตุ!!!|M|KD03-016|1|||จอมเวทย์|R||||
+เชาว์ปัญญาลิง - ชิงปัญญาเรา|M|KD03-017|0|||สัตว์|R||||
+น้ำซุปชาบู|M|KD03-018|2|||จอมเวทย์|M||||
+ของขวัญจากโอตะ|M|KD03-019|4|||จอมเวทย์|M||||
+เวทีแห่งความฝัน|M|KD03-020|2|||จอมเวทย์|L||||
+เวทีแห่งความฝัน|M|KD03-020|2|||จอมเวทย์|L|||SCR|
+ไม่นะ มีมมิจัง !|L|KD03-021|||||||||
+ไม่นะ อู๊ด !|L|KD03-022|||||||||
+ไม่นะ ไอ้ดำ !|L|KD03-023|||||||||
+ไม่นะ ซาร่า !|L|KD03-024|||||||||
+ไม่นะ โดม !|L|KD03-025|||||||||
+ราชันย์หุ่นนักรบผู้กล้า : คริติคอล ไมเกรน|A|KD04-001|5|5|R|หุ่นยนต์|||2||
+ราชันย์หุ่นนักรบผู้กล้า : คริติคอล ไมเกรน|A|KD04-001|5|5|R|หุ่นยนต์|||2|SCR|
+ด็อกเตอร์ เพน|A|KD04-002|4|2|R|ต่างชาติ|||2||
+ด็อกเตอร์ เพน|A|KD04-002|4|2|R|ต่างชาติ|||2|SCR|
+หุ่นนักรบผู้กล้า : ไมเกรน|A|KD04-003|5|4||หุ่นยนต์|||2||
+หุ่นนักรบผู้กล้า : โปรโตไมเกรน|A|KD04-004|4|3||หุ่นยนต์|||2||
+ยานเกราะผู้กล้า : ไดบาเรีย|A|KD04-005|0|0|R|หุ่นยนต์|||4||
+ยานเกราะผู้กล้า : ไดบาเรีย|A|KD04-005|0|0||หุ่นยนต์|||4|SCR|
+อากาศยานผู้กล้า : แอร์ซิด รีฟลักซ์|A|KD04-006|1|1||หุ่นยนต์|||2||
+โดรนสอดแนมผู้กล้า : เก๊าท์|A|KD04-007|4|4||หุ่นยนต์|||1||
+สหายหุ่นผู้กล้า โฟเบีย|A|KD04-008|3|0||หุ่นยนต์|||2||
+คนรวย|A|KD04-009|5|1||คน|||4||
+ลูกคนรวย|A|KD04-010|2|0||คน|||4||
+พี่โด 2.0|A|KD04-011|8|8||หุ่นยนต์|||2||
+สุดยอดท่าไม้ตายผู้กล้า THE END|M|KD04-012|4|||หุ่นยนต์|N|1|||
+สุดยอดท่าไม้ตายผู้กล้า THE END|M|KD04-012|4|||หุ่นยนต์|N|1||SCR|
+สุดยอดท่าไม้ตายผู้กล้า THE END|M|KD04-012|4|||หุ่นยนต์|N|1||PR|
+สุดยอดท่าไม้ตายผู้กล้า THE END|M|KD04-012|4|||หุ่นยนต์|N|1||CBR|
+อาวุธหุ่นนักรบผู้กล้า "อีโบล่า ซอร์ด"|M|KD04-013|2|||หุ่นยนต์|M||||
+อาวุธหุ่นนักรบผู้กล้า "อีโบล่า ซอร์ด"|M|KD04-013|2|||หุ่นยนต์|M|||SCR|
+อาวุธนักรบผู้กล้า " ไบโพล่า ชิลด์ "|M|KD04-014|1|||หุ่นยนต์|M||||
+อาวุธหุ่นนักรบผู้กล้า "GHD โคลค"|M|KD04-015|2|||หุ่นยนต์|M||||
+ฐานหุ่นนักรบผู้กล้า ซีทันยาน|M|KD04-016|2|||หุ่นยนต์|L||||
+Micro Plaza สะพานพลาสติก|M|KD04-017|1|||จอมเวทย์|L||||
+ความเจริญ|M|KD04-018|1|||จอมเวทย์|N||||
+ชายจากอนาคต|M|KD04-019|0|||จอมเวทย์|R||||
+คว้าปืนมายิงหมี|M|KD04-020|2|||จอมเวทย์|R||||
+ไม่นะ มีมมิจัง !|L|KD04-021|||||||||
+ไม่นะ ไมเกรน !|L|KD04-022|||||||||
+ไม่นะ มะนาว !|L|KD04-023|||||||||
+ไม่นะ แดงเดือด !|L|KD04-024|||||||||
+ไม่นะ เจี๊ยบ !|L|KD04-025|||||||||
+มณโฑ ราชินีเหล่ายักษ์|A|FPRO-001|5|3|G|คน|||1||
+หุ่นนักรบผู้กล้า : ไมเกรน|A|FPRO-002|5|4||หุ่นยนต์|||2||
+พี่หน่วง พิธีกรผมสวย|A|FPRO-003|4|4|P|คน|||2||
+พระอิศวร เทพผู้ทำลาย|A|FPRO-004|8|7|R|เทพ||1|1||
+พระนารายณ์ เทพผู้พิทักษ์|A|FPRO-005|8|8||เทพ|||1||
+พญายักษ์ ทศกัณฐ์|A|FPRO-006|4|5|G|ยักษ์|||1||
+ไดโนกาฬสินธุ์ - สยามโมไทรันนัส|A|FPRO-007|6|6|B|กะปอม||1|3||
+กุ่ย นักเอาตัวรอด|A|RM01-001|3|2|R|คน|||2||
+เบดิเวียร์ อัศวินโต๊ะกลมแห่งความภักดี|A|RM01-002|3|3|R|ต่างชาติ|||2||
+วิรูฬ นาคเกล็ดทอง|A|RM01-003|3|4|R|สัตว์วิเศษ|||0||
+ฉัพพยา นาคเกล็ดรุ้ง|A|RM01-004|3|3|R|สัตว์วิเศษ|||2||
+เอรา นาคเกล็ดเขียว|A|RM01-005|2|1|R|สัตว์วิเศษ|||3||
+อาเธอร์ ราชาแห่งอัศวินโต๊ะกลม|A|RM01-006|7|5|R|ต่างชาติ|||2||
+อาเธอร์ ราชาแห่งอัศวินโต๊ะกลม|A|RM01-006|7|5|R|ต่างชาติ|||2|SCR|
+เคย์ อัศวินโต๊ะกลมแห่งความหลักแหลม|A|RM01-007|3|2|R|ต่างชาติ|||3||
+วันชัยเปรตรุ่นพ่อ|A|RM01-008|4|1|R|เปรต|||0||
+พระแม่อุมาเทวี|A|RM01-009|4|2|R|เทพ|||2||
+เจ้าแม่กาลี|A|RM01-010|8|7|R|เทพ|||1||
+หุ่นนักรบผู้กล้าปีศาจ : อีวิลไมเกรน|A|RM01-011|5|4|R|หุ่นยนต์|||2||
+ผู้เจริญ นาย|A|RM01-012|3|0|B|คน|||4||
+ลานเซลอต อัศวินโต๊ะกลมแห่งการปฏิวัติ|A|RM01-013|4|4|B|ต่างชาติ|||1||
+กาเวน อัศวินโต๊ะกลมแห่งแสงอาทิตย์|A|RM01-014|5|4|B|ต่างชาติ|||3||
+กาเวน อัศวินโต๊ะกลมแห่งแสงอาทิตย์|A|RM01-014|5|4|B|ต่างชาติ|||3|SCR|
+เจค นักฆ่ามือเก๋า|A|RM01-015|4|6|B|ต่างชาติ|||1||
+เจค นักฆ่ามือเก๋า|A|RM01-015|4|6|B|ต่างชาติ|||1|SCR|
+ของขวัญที่เมียทิ้งไว้ให้|A|RM01-016|2|1|B|สัตว์|||0||
+ไดโนกาฬสินธุ์ - สุธีธรนีซอรัส|A|RM01-017|3|4|B|กะปอม|||0||
+สวีนนีย์ มนุษย์ดาว R18|A|RM01-018|4|5|B|เอเลี่ยน|||0||
+อามัส มนุษย์ดาว R18|A|RM01-019|3|0|B|เอเลี่ยน|||3||
+จอย มนุษย์ดาว R18|A|RM01-020|4|2|B|เอเลี่ยน|||2||
+จ่ามะนาวแขนเหล็ก|A|RM01-021|4|5|B|คน|||1||
+ริกกี้ ฆาตกรถลกหนัง|A|RM01-022|4|4|B|แมลง|||1||
+นักรบ ฮอล|A|RM01-023|3|3|P|คน|||0||
+เฮล่า เทพแอสการ์ดแห่งความตาย|A|RM01-024|5|2|P|เทพ|||2||
+Ecycle|A|RM01-025|2|2|P|หุ่นยนต์|||3||
+เจ๊หมวย เจ้าของร้านหม่าล่า|A|RM01-026|1|2|P|ต่างชาติ|||1||
+สกัลด์ เทพธิดาแห่งวัลฮัลลา|A|RM01-027|2|2|P|เทพ|||2||
+โอลรุน เทพธิดาแห่งวัลฮัลลา|A|RM01-028|3|3|P|เทพ|||2||
+ซีกรุน เทพธิดาแห่งวัลฮัลลา|A|RM01-029|5|5|P|เทพ|||2||
+อาม่อน No.7|A|RM01-030|7|7|P|นรก||1|0||
+จอมเวทย์ เบล่า|A|RM01-031|3|2|P|ต่างชาติ|||2||
+คุณเชิดชัย Super Air|A|RM01-032|2|2|G|คน|||1||
+กระเป๋าเครื่องบิน Super Air|A|RM01-033|1|1|G|คน|||2||
+หมาเครื่องบิน Super Air|A|RM01-034|2|2|G|สัตว์|||0||
+ผู้โดยสาร Super Air|A|RM01-035|0|0|G|คน|||2||
+รถถัง A003|A|RM01-036|0|3|G|หุ่นยนต์|||0||
+สว นาโนแมชชีน|A|RM01-037|8|8|G|หุ่นยนต์||1|1||
+ตั๊กแตนหยิน|A|RM01-038|5|4|G|แมลง|||0||
+ตั๊กแตนหยาง|A|RM01-039|4|3|G|แมลง|||1||
+ตั๊กแตนหญิง|A|RM01-040|3|2|G|แมลง|||1||
+พูดไทยได้ 5 คำ|M|RM01-041|1|||ต่างชาติ|N||||
+พูดไทยได้ 5 คำ|M|RM01-041|1|||ต่างชาติ|N|||SCR|
+เครื่องบิน Super Air|M|RM01-042|2|||หุ่นยนต์|N||||
+ชะตาไม่มีวันจบลง|M|RM01-043|4|||จอมเวทย์|N||||
+แหมกำบ่อ้าย|M|RM01-044|3|||จอมเวทย์|N||||
+อย่าให้มีครั้งที่ 2|M|RM01-045|1|||จอมเวทย์|R||||
+เสียงเรียกแห่งวัลฮัลลา|M|RM01-046|2|||เทพ|R||||
+โจมตีตัวฉันให้โดนถ้าหากเธอทำได้|M|RM01-047|2|||จอมเวทย์|R||||
+ลุ้นเยี่ยวเหนียว|M|RM01-048|0|||จอมเวทย์|R||||
+แหม่อ้ายก็~~~|M|RM01-049|2|||จอมเวทย์|R||||
+รัททาทุยเกาะหน้า|M|RM01-050|1|||รัททาทุย|R||||
+ดาบศักดิ์สิทธิ์ อาลอนไดร์ท|M|RM01-051|3|||จอมเวทย์|M||||
+กระบองแสง คทาวุธ|M|RM01-052|0|||ยักษ์|M|1|||
+มนุษย์ดัดแปลง|M|RM01-053|2|||หุ่นยนต์|M||||
+ลูกแก้วนาคา|M|RM01-054|3|||จอมเวทย์|M||||
+ดาบศักดิ์สิทธิ์ แกลลาติน|M|RM01-055|2|||จอมเวทย์|M||||
+ปลอกคอซื่อสัตย์|M|RM01-056|4|||จอมเวทย์|M||||
+ดาบศักดิ์สิทธิ์ คาเรนต์|M|RM01-057|2|||จอมเวทย์|M||||
+ถ้ำนาคา|M|RM01-058|1|||จอมเวทย์|L||||
+บิฟร็อสต์ สะพานสายรุ้ง|M|RM01-059|2|||เทพ|L||||
+ยานสำรวจ R18|C|RM01-060|4|4|B|หุ่นยนต์|||2||
+ยานสำรวจ R18|C|RM01-060|4|4|B|หุ่นยนต์|||2|SCR|</script>
+<script>
+(async()=>{
+'use strict';
+// ---------- card data ----------
+const CN={R:'แดง',B:'ฟ้า',G:'เขียว',P:'ม่วง'}, TN={A:'Avatar',M:'Magic',C:'Construct',L:'Life',T:'Token'}, SN={L:'Land',M:'Modification',N:'Normal',R:'React'};
+const parseRow=(l,i)=>{const p=l.split('|');
+  return {i,name:p[0],t:p[1],print:p[2],cost:p[3]===''?null:+p[3],power:p[4]===''?null:+p[4],color:p[5],symbol:p[6],sub:p[7],ex:p[8],gem:p[9]===''?null:+p[9],alt:p[10],limit:p[11]===''?null:+p[11],set:p[2].split('-')[0]}};
+const CARDS=document.getElementById('carddb').textContent.trim().split('\n').filter(Boolean).map(parseRow);
+const key=c=>c.print+(c.alt?'-'+c.alt:'');
+const BYKEY=new Map(CARDS.map(c=>[key(c),c]));
+// cards released after the built-in list, read from bottcg.com (skipped if offline)
+try{
+  const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),6000);
+  const live=await (await fetch('https://cdn.bottcg.com/data/cards.json',{signal:ctl.signal})).json();clearTimeout(tm);
+  const Cm={'แดง':'R','ฟ้า':'B','เขียว':'G','ม่วง':'P'},EXm={'Only #1':'1','โดนใจ':'D','ลำเอียง':'L'},ALT=['SCR','PR','CBR'];
+  for(const c of (Array.isArray(live)?live:[])){
+    if(!c||!c.print||!c.type)continue;const alt=ALT.includes(c.rare)?c.rare:'';const k=c.print+(alt?'-'+alt:'');if(BYKEY.has(k))continue;
+    const row=[String(c.name).replace(/[|\n]/g,'/'),c.type[0],c.print,c.cost??'',c.power??'',Cm[c.color]||'',c.symbol||'',(c.subtype||'')[0]||'',EXm[c.ex]||'',c.gem??'',alt,c.customLimit??''].join('|');
+    const card=parseRow(row,CARDS.length);CARDS.push(card);BYKEY.set(k,card);
+  }
+}catch(e){}
+const IMG_DIR={SD09:'123v1k1',RM01:'0aslabe'};
+const imgUrl=c=>`https://cdn.bottcg.com/cards/${IMG_DIR[c.set]?IMG_DIR[c.set]+'/':''}${key(c)}.png`;
+function artStyle(i){return `background-image:url("${imgUrl(CARDS[i])}");background-size:cover;background-position:center`}
+
+// ---------- helpers ----------
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),1800)}
+function cardEl(i,{mine=false,rest=false,back=false,mod=0,cnt=0}={}){
+  const d=document.createElement('div');d.className='card'+(mine?' mine':'')+(rest?' rest':'')+(back?' back':'');
+  if(!back&&i!=null){d.setAttribute('style',artStyle(i));d.dataset.i=i;d.setAttribute('aria-label',CARDS[i].name)}
+  if(mod){const m=document.createElement('span');m.className='mod'+(mod<0?' neg':'');m.textContent=(mod>0?'+':'')+mod;d.appendChild(m)}
+  if(cnt){const m=document.createElement('span');m.className='cnt';m.textContent=cnt;d.appendChild(m)}
+  if(mine)d.tabIndex=0;
+  return d;
+}
+function showPreview(i){
+  if(i==null)return;const c=CARDS[i];
+  $('preview').setAttribute('style',artStyle(i));
+  const bits=[TN[c.t]];if(c.sub)bits.push(SN[c.sub]);if(c.color)bits.push(CN[c.color]);if(c.symbol)bits.push(c.symbol);
+  const stats=[];if(c.cost!=null)stats.push('Cost '+c.cost);if(c.power!=null&&c.t!=='M')stats.push('Power '+c.power);if(c.gem!=null)stats.push('Gem '+c.gem);
+  $('pinfo').innerHTML=`<b>${esc(c.name)}</b><br><span class="muted">${esc(key(c))} · ${esc(bits.join(' · '))}</span><br>${esc(stats.join(' · '))}${c.ex==='1'?'<br><b>Only #1</b>':''}`;
+}
+document.addEventListener('mouseover',e=>{const c=e.target.closest('.card[data-i]');if(c)showPreview(+c.dataset.i)});
+
+// ---------- tabs ----------
+let view='lobby';
+function go(v){view=v;['lobby','deck','game'].forEach(n=>{$('v-'+n).hidden=n!==v;$('tab-'+n).setAttribute('aria-pressed',n===v)});if(v==='deck')renderDB();if(v==='game')render();if(v==='lobby')renderLobby();drawArrows()}
+$('tab-lobby').onclick=()=>go('lobby');$('tab-deck').onclick=()=>go('deck');$('tab-game').onclick=()=>go('game');
+
+// ---------- decks ----------
+// deck = {name, main:{key:qty}, life:{key:qty}}
+function sampleDeck(){
+  const main={},life={};let n=0;
+  const sd=CARDS.filter(c=>c.set==='SD01'&&!c.alt);
+  sd.filter(c=>c.t==='L').slice(0,5).forEach(c=>life[key(c)]=1);
+  const pool=sd.filter(c=>c.t==='A'||c.t==='M'||c.t==='C');
+  for(let r=0;r<4&&n<50;r++)for(const c of pool){if(n>=50)break;if(c.ex==='1'&&main[key(c)])continue;main[key(c)]=(main[key(c)]||0)+1;n++}
+  return {name:'เด็คตัวอย่าง SD01',main,life};
+}
+let decks=ls.get('bot.decks',null);
+if(!decks||!decks.length){decks=[sampleDeck()];ls.set('bot.decks',decks)}
+let cur=JSON.parse(JSON.stringify(decks[0]));
+const sum=o=>Object.values(o).reduce((a,b)=>a+b,0);
+function nameCount(d,name){let n=0;for(const[k,q]of Object.entries(d.main)){const c=BYKEY.get(k);if(c&&c.name===name)n+=q}for(const[k,q]of Object.entries(d.life)){const c=BYKEY.get(k);if(c&&c.name===name)n+=q}return n}
+function maxCopies(c){if(c.limit)return c.limit;if(c.ex==='1')return 1;return 4}
+function addCard(c,delta){
+  const part=c.t==='L'?cur.life:cur.main,k=key(c);
+  if(delta>0){
+    if(c.t==='L'){if(sum(cur.life)>=5)return toast('Life ครบ 5 ใบแล้ว');if(nameCount(cur,c.name)>=1)return toast('Life ต้องชื่อไม่ซ้ำกัน')}
+    else{if(c.t==='T')return toast('Token ไม่ต้องใส่ในเด็ค');if(nameCount(cur,c.name)>=maxCopies(c))return toast('ใส่ชื่อนี้ได้สูงสุด '+maxCopies(c)+' ใบ')}
+  }
+  part[k]=(part[k]||0)+delta;if(part[k]<=0)delete part[k];
+  renderDeckList();renderResults(false);
+}
+function deckWarnings(d){
+  const w=[];const m=sum(d.main),l=sum(d.life);
+  if(m!==50)w.push(`เด็คหลักมี ${m} ใบ (ต้อง 50)`);
+  if(l!==5)w.push(`Life มี ${l} ใบ (ต้อง 5)`);
+  const only=Object.entries(d.main).filter(([k])=>BYKEY.get(k)?.ex==='1').reduce((a,[,q])=>a+q,0);
+  if(only>1)w.push('มีการ์ด Only #1 เกิน 1 ใบ');
+  if(Object.keys(d.main).some(k=>BYKEY.get(k)?.ex==='L'))w.push('มีการ์ดลำเอียง (ใช้แข่งทางการไม่ได้)');
+  return w;
+}
+function dlRow(c,q){
+  const r=document.createElement('div');r.className='dl-row';
+  r.innerHTML=`<span class="q">${q}</span><span class="n card-name" data-i="${c.i}">${esc(c.name)} <span class="muted">${esc(key(c))}</span></span><span class="row" style="gap:3px"><button aria-label="ลด">−</button><button aria-label="เพิ่ม">+</button></span>`;
+  const [m,p]=r.querySelectorAll('button');m.onclick=()=>addCard(c,-1);p.onclick=()=>addCard(c,1);
+  r.querySelector('.n').onmouseenter=()=>showPreview(c.i);
+  return r;
+}
+function sortEntries(o){return Object.entries(o).map(([k,q])=>[BYKEY.get(k),q]).filter(x=>x[0]).sort((a,b)=>(a[0].t>b[0].t?1:a[0].t<b[0].t?-1:0)||((a[0].cost??99)-(b[0].cost??99))||a[0].name.localeCompare(b[0].name,'th'))}
+function renderDeckList(){
+  $('deckName').value=cur.name||'';
+  const m=sum(cur.main),l=sum(cur.life);
+  $('mainCount').textContent=m;$('mainCount').className='count '+(m===50?'ok':'bad');
+  $('lifeCount').textContent=l;$('lifeCount').className='count '+(l===5?'ok':'bad');
+  $('deckWarn').textContent=deckWarnings(cur).join(' · ');
+  $('dlLife').replaceChildren(...sortEntries(cur.life).map(([c,q])=>dlRow(c,q)));
+  $('dlMain').replaceChildren(...sortEntries(cur.main).map(([c,q])=>dlRow(c,q)));
+  $('savedDecks').replaceChildren(...decks.map((d,ix)=>{
+    const r=document.createElement('div');r.className='row';
+    const b=document.createElement('button');b.className='ghost';b.style.flex='1';b.style.textAlign='left';b.textContent=`${d.name} (${sum(d.main)}+${sum(d.life)})`;b.onclick=()=>{cur=JSON.parse(JSON.stringify(d));renderDeckList();renderResults(false)};
+    const x=document.createElement('button');x.className='ghost';x.textContent='ลบ';x.onclick=()=>{if(x.dataset.sure){decks.splice(ix,1);if(!decks.length)decks=[sampleDeck()];ls.set('bot.decks',decks);renderDeckList();renderLobby()}else{x.dataset.sure=1;x.textContent='ยืนยันลบ'}};
+    r.append(b,x);return r}));
+}
+function inDeck(c){return (c.t==='L'?cur.life:cur.main)[key(c)]||0}
+let resLimit=120;
+function renderResults(reset=true){
+  if(reset)resLimit=120;
+  const q=$('q').value.trim().toLowerCase(),ft=$('fType').value,fc=$('fColor').value,fco=$('fCost').value,fs=$('fSet').value;
+  const hits=CARDS.filter(c=>(!ft||c.t===ft)&&(!fc||(fc==='-'?!c.color:c.color===fc))&&(fco===''||String(c.cost)===fco)&&(!fs||c.set===fs)&&(!q||c.name.toLowerCase().includes(q)||key(c).toLowerCase().includes(q)||(c.symbol||'').toLowerCase().includes(q)));
+  $('resInfo').textContent=`พบ ${hits.length} ใบ · คลิกเพื่อเพิ่ม คลิกขวาหรือกดค้างเพื่อเอาออก`;
+  const box=$('results');box.replaceChildren();
+  hits.slice(0,resLimit).forEach(c=>{
+    const r=document.createElement('div');r.className='rc';
+    r.appendChild(cardEl(c.i));
+    const nm=document.createElement('div');nm.className='nm';nm.textContent=c.name;nm.title=c.name+' · '+key(c);r.appendChild(nm);
+    const q=inDeck(c);if(q){const b=document.createElement('span');b.className='badge';b.textContent=q;r.appendChild(b)}
+    r.onclick=()=>addCard(c,1);
+    r.oncontextmenu=e=>{e.preventDefault();if(inDeck(c))addCard(c,-1)};
+    let t;r.addEventListener('touchstart',()=>{t=setTimeout(()=>{t=null;if(inDeck(c))addCard(c,-1)},550)},{passive:true});
+    r.addEventListener('touchend',e=>{if(t){clearTimeout(t)}else e.preventDefault()});
+    box.appendChild(r);
+  });
+  if(hits.length>resLimit){const b=document.createElement('button');b.textContent=`แสดงเพิ่ม (${hits.length-resLimit})`;b.style.gridColumn='1/-1';b.onclick=()=>{resLimit+=120;renderResults(false)};box.appendChild(b)}
+}
+function renderDB(){renderDeckList();renderResults()}
+(()=>{const costs=[...new Set(CARDS.map(c=>c.cost).filter(x=>x!=null))].sort((a,b)=>a-b);$('fCost').append(...costs.map(c=>new Option('Cost '+c,c)));
+  const sets=[...new Set(CARDS.map(c=>c.set))];$('fSet').append(...sets.map(s=>new Option(s,s)))})();
+['q','fType','fColor','fCost','fSet'].forEach(id=>$(id).addEventListener('input',()=>renderResults()));
+$('saveDeck').onclick=()=>{cur.name=$('deckName').value.trim()||'เด็คไม่มีชื่อ';const ix=decks.findIndex(d=>d.name===cur.name);if(ix>=0)decks[ix]=JSON.parse(JSON.stringify(cur));else decks.push(JSON.parse(JSON.stringify(cur)));ls.set('bot.decks',decks);renderDeckList();renderLobby();toast('บันทึกเด็คแล้ว')};
+$('newDeck').onclick=()=>{cur={name:'',main:{},life:{}};renderDeckList();renderResults(false)};
+$('exportTxt').onclick=()=>{const lines=['# Main',...sortEntries(cur.main).map(([c,q])=>q+' '+key(c)),'# Life',...sortEntries(cur.life).map(([c,q])=>q+' '+key(c))];$('deckText').value=lines.join('\n');$('deckText').select();try{navigator.clipboard.writeText($('deckText').value).then(()=>toast('คัดลอกแล้ว'),()=>{})}catch(e){}};
+$('importTxt').onclick=()=>{
+  const d={name:cur.name||'เด็คนำเข้า',main:{},life:{}};const miss=[];
+  $('deckText').value.split('\n').forEach(l=>{const m=l.trim().match(/^(\d+)\s*[x×]?\s+([A-Za-z0-9]+-\d+[A-Za-z]*(?:-[A-Z]+)?)/i)||l.trim().match(/^([A-Za-z0-9]+-\d+(?:-[A-Z]+)?)\s*[x×]\s*(\d+)/i);
+    if(!m)return;let q,k;if(/^\d+$/.test(m[1])){q=+m[1];k=m[2].toUpperCase()}else{k=m[1].toUpperCase();q=+m[2]}
+    const c=BYKEY.get(k);if(!c){miss.push(k);return}const part=c.t==='L'?d.life:d.main;part[k]=(part[k]||0)+q});
+  cur=d;renderDeckList();renderResults(false);toast(miss.length?'ไม่รู้จัก: '+miss.join(', '):'นำเข้าแล้ว');
+};
+
+// ---------- game state ----------
+// field entry: {i, s:asleep, f:facedown, m:power mod}
+let G=null;          // my private + public state
+let O=null;          // opponent public state (from presence)
+let roomCode=null, spectate=false, solo=false;
+const oppLog=new Map();
+function newGame(deck,startN){
+  const main=[],life=[];
+  for(const[k,q]of Object.entries(deck.main)){const c=BYKEY.get(k);if(c)for(let n=0;n<q;n++)main.push(c.i)}
+  for(const[k,q]of Object.entries(deck.life)){const c=BYKEY.get(k);if(c)for(let n=0;n<q;n++)life.push(c.i)}
+  shuffle(main);shuffle(life);
+  return {v:2,pid:rid(),deckName:deck.name,deck:main,hand:main.splice(0,startN),life:life.map(i=>({i,up:0,u:rid()})),hits:0,A:[],C:[],M:[],H:[],D:[],land:null,landTs:0,turn:1,log:[],reveal:[],arrows:[]};
+}
+function rid(){return Math.random().toString(36).slice(2,8)}
+function migrate(g){g.pid=g.pid||rid();g.arrows=g.arrows||[];['A','C','M'].forEach(z=>g[z].forEach(e=>{e.u=e.u||rid()}));g.life.forEach(e=>{e.u=e.u||rid()});if(g.land)g.land.u=g.land.u||rid();g.v=2;return g}
+function saveG(){if(G&&roomCode)ls.set('bot.game.'+roomCode,G)}
+const nick=()=>($('nick').value.trim()||'ผู้เล่น').slice(0,20);
+function log(t){if(!G)return;G.log.push({t:Date.now(),x:t});if(G.log.length>60)G.log.shift()}
+function pruneArrows(){if(!G||!G.arrows)return;const live=new Set([...G.A,...G.C,...G.M,...G.life].map(e=>e.u));if(G.land)live.add(G.land.u);G.arrows=G.arrows.filter(a=>live.has(a[0]))}
+function act(fn,text){if(!G||spectate)return;fn();pruneArrows();if(text)log(text);saveG();render();pushPresence()}
+const cn=i=>CARDS[i].name;
+
+// moving cards between places. place = {z:'hand'|'deck'|'A'|'C'|'M'|'H'|'D'|'life'|'land', ix}
+function take(z,ix){
+  if(z==='hand')return G.hand.splice(ix,1)[0];
+  if(z==='deck')return G.deck.splice(ix,1)[0];
+  if(z==='H'||z==='D')return G[z].splice(ix,1)[0];
+  if(z==='A'||z==='C'||z==='M')return G[z].splice(ix,1)[0].i;
+  if(z==='life')return G.life.splice(ix,1)[0].i;
+  if(z==='land'){const i=G.land.i;G.land=null;return i}
+  if(z==='reveal')return null;
+}
+const ZN={hand:'มือ',deckTop:'บนเด็ค',deckBottom:'ใต้เด็ค',A:'Avatar Zone',C:'Construct Zone',M:'Magic Zone',H:'นรก',D:'มิติมืด',land:'Land Magic',life:'Life'};
+function put(i,to){
+  if(to==='hand')G.hand.push(i);
+  else if(to==='deckTop')G.deck.unshift(i);
+  else if(to==='deckBottom')G.deck.push(i);
+  else if(to==='H'||to==='D')G[to].push(i);
+  else if(to==='A'||to==='C'||to==='M')G[to].push({i,s:0,f:0,m:0,u:rid()});
+  else if(to==='land'){if(G.land)G.H.push(G.land.i);G.land={i,s:0,f:0,m:0,u:rid()};G.landTs=Date.now()}
+  else if(to==='life')G.life.push({i,up:1,u:rid()});
+  G.reveal=G.reveal.filter(x=>x!==i||G.hand.includes(i));
+}
+function move(z,ix,to,verb){
+  const i=(z==='A'||z==='C'||z==='M')?G[z][ix].i:z==='hand'?G.hand[ix]:z==='life'?G.life[ix].i:z==='land'?G.land.i:G[z][ix];
+  const secret=(z==='hand'||z==='deck')&&(to==='deckTop'||to==='deckBottom'||to==='hand');
+  act(()=>{take(z,ix);put(i,to)},verb||(secret?`ย้ายการ์ด 1 ใบไป${ZN[to]}`:`${cn(i)} → ${ZN[to]}`));
+}
+function draw(n=1){act(()=>{for(let k=0;k<n&&G.deck.length;k++)G.hand.push(G.deck.shift())},`จั่ว ${n} ใบ`)}
+
+// ---------- online: browsers connect to each other directly (PeerJS) ----------
+const PREFIX='bottcg-tl-v1-';
+let peer=null,hostConn=null,conns=new Map(),states=new Map(),isHost=false,myId=null,netGen=0,pushT=null;
+let peers=[];
+function netStatus(t,on){const p=$('netpill');p.textContent=t;p.className='pill'+(on?' on':'')}
+function publicState(){
+  if(!G||spectate)return {g:roomCode,nm:nick(),pl:0};
+  const fe=e=>[e.f?-1:e.i,e.s?1:0,e.f?1:0,e.m||0,e.u,e.x?1:0,(e.n||'').slice(0,24)];
+  const st={g:roomCode,nm:nick(),pl:1,pid:G.pid,tn:G.turn,dk:G.deck.length,hd:G.hand.length,hits:G.hits,
+    lf:G.life.map(e=>[e.up?e.i:-1,e.u]),A:G.A.map(fe),C:G.C.map(fe),M:G.M.map(fe),H:G.H.slice(),D:G.D.slice(),
+    ld:G.land?[G.land.i,G.landTs,G.land.u,G.land.x?1:0,(G.land.n||'').slice(0,24)]:null,rv:G.reveal.slice(0,8),ar:G.arrows.slice(-6),lg:G.log.slice(-6).map(e=>[e.t,e.x.slice(0,70)])};
+  const size=()=>new Blob([JSON.stringify(st)]).size;
+  while(size()>3900&&st.lg.length)st.lg.shift();
+  while(size()>3900&&st.H.length>10)st.H.splice(0,5);
+  return st;
+}
+const K=i=>(i==null||i<0)?-1:key(CARDS[i]);
+const I=k=>typeof k==='string'?(BYKEY.has(k)?BYKEY.get(k).i:-1):(k==null?-1:k);
+function encodeState(st){if(!st.pl)return st;const e=a=>[K(a[0]),...a.slice(1)];
+  return {...st,lf:st.lf.map(e),A:st.A.map(e),C:st.C.map(e),M:st.M.map(e),H:st.H.map(K),D:st.D.map(K),ld:st.ld?[K(st.ld[0]),...st.ld.slice(1)]:null,rv:st.rv.map(K)}}
+function decodeState(st){if(!st||!st.pl)return st||{};const d=a=>Array.isArray(a)?[I(a[0]),...a.slice(1)]:a;const ok=i=>i>=0;
+  const ld=st.ld&&I(st.ld[0])>=0?[I(st.ld[0]),...st.ld.slice(1)]:null;
+  return {...st,lf:(st.lf||[]).map(d),A:(st.A||[]).map(d),C:(st.C||[]).map(d),M:(st.M||[]).map(d),H:(st.H||[]).map(I).filter(ok),D:(st.D||[]).map(I).filter(ok),ld,rv:(st.rv||[]).map(I).filter(ok),ar:st.ar||[]}}
+const myState=()=>encodeState(publicState());
+function pushPresence(){
+  if(!roomCode||solo)return;clearTimeout(pushT);
+  pushT=setTimeout(()=>{const st=myState();if(isHost){states.set(myId,st);broadcast()}else if(hostConn&&hostConn.open){try{hostConn.send({t:'st',st})}catch(e){}}},80);
+}
+function broadcast(){
+  const list=[...states].map(([id,st])=>({id,st}));
+  for(const c of conns.values())if(c.open){try{c.send({t:'all',list})}catch(e){}}
+  netStatus(conns.size?`ห้อง ${roomCode} · ออนไลน์ ${conns.size+1} คน`:`ห้อง ${roomCode} · รออีกฝ่าย`,true);
+  applyList(list);
+}
+function applyList(list){peers=(list||[]).filter(x=>x&&x.id!==myId&&x.st&&x.st.g===roomCode).map(x=>({peer:x.id,...decodeState(x.st)}));onRoom()}
+function teardown(){netGen++;clearTimeout(pushT);try{peer&&peer.destroy()}catch(e){}peer=null;hostConn=null;conns.clear();states.clear();isHost=false;myId=null;peers=[]}
+function scheduleRetry(gen,ms){setTimeout(()=>{if(gen===netGen&&roomCode&&!solo)connectRoom()},ms??(2500+Math.random()*2000))}
+// whoever reaches the room code first hosts it; everyone else connects to the host
+function connectRoom(){
+  if(!window.Peer){netStatus('โหลดระบบออนไลน์ไม่ได้ · ตรวจอินเทอร์เน็ต');return}
+  teardown();const gen=netGen;netStatus('กำลังเชื่อมต่อห้อง '+roomCode+'…');
+  const p=new Peer(PREFIX+roomCode,{debug:0});peer=p;
+  p.on('open',id=>{if(gen!==netGen)return;isHost=true;myId=id;states.set(myId,myState());broadcast()});
+  p.on('connection',c=>{if(gen!==netGen)return;
+    c.on('open',()=>{if(gen!==netGen)return;conns.set(c.peer,c);broadcast()});
+    c.on('data',m=>{if(gen===netGen&&m&&m.t==='st'&&m.st){states.set(c.peer,m.st);broadcast()}});
+    c.on('close',()=>{conns.delete(c.peer);states.delete(c.peer);if(gen===netGen)broadcast()});});
+  p.on('error',e=>{if(gen!==netGen)return;
+    if(e.type==='unavailable-id')joinAsGuest(gen);
+    else{netStatus('เชื่อมต่อไม่ได้ ('+e.type+') · กำลังลองใหม่');scheduleRetry(gen)}});
+  p.on('disconnected',()=>{if(gen===netGen&&!p.destroyed){try{p.reconnect()}catch(e){}}});
+}
+function joinAsGuest(gen){
+  try{peer&&peer.destroy()}catch(e){}
+  const p=new Peer({debug:0});peer=p;
+  p.on('open',id=>{if(gen!==netGen)return;myId=id;
+    const c=p.connect(PREFIX+roomCode,{reliable:true});
+    setTimeout(()=>{if(gen===netGen&&!hostConn){netStatus('ต่อกับอีกเครื่องไม่ได้ · เครือข่ายอาจบล็อก · กำลังลองใหม่');scheduleRetry(gen,0)}},15000);
+    c.on('open',()=>{if(gen!==netGen)return;hostConn=c;netStatus(`ห้อง ${roomCode} · เชื่อมต่อแล้ว`,true);try{c.send({t:'st',st:myState()})}catch(e){}});
+    c.on('data',m=>{if(gen===netGen&&m&&m.t==='all')applyList(m.list)});
+    c.on('close',()=>{if(gen!==netGen)return;hostConn=null;peers=[];onRoom();netStatus('หลุดจากห้อง · กำลังต่อใหม่');scheduleRetry(gen,1500)});});
+  p.on('error',e=>{if(gen!==netGen)return;netStatus(e.type==='peer-unavailable'?'ห้องว่าง · กำลังลองใหม่':'เชื่อมต่อไม่ได้ ('+e.type+') · กำลังลองใหม่');scheduleRetry(gen)});
+}
+addEventListener('pagehide',()=>{try{peer&&peer.destroy()}catch(e){}});
+function onRoom(){
+  const players=peers.filter(p=>p.pl===1);
+  O=players[0]||null;if(spectate)G=null;
+  for(const p of players)(p.lg||[]).forEach(([t,x])=>oppLog.set(p.peer+':'+t,{t,x,who:p.nm}));
+  // shared Land Magic: the newer one replaces the older
+  if(G&&!spectate&&O&&O.ld&&G.land&&O.ld[1]>G.landTs){const i=G.land.i;G.H.push(i);G.land=null;log(`${cn(i)} ถูกแทนที่ด้วย Land Magic ของอีกฝ่าย → นรก`);saveG();pushPresence()}
+  if(view==='game')render();else if(view==='lobby')renderLobby();
+}
+
+// ---------- lobby ----------
+const CODECH='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const genCode=()=>Array.from({length:4},()=>CODECH[Math.floor(Math.random()*CODECH.length)]).join('');
+let pendingCode=genCode();
+function renderLobby(){
+  $('newCode').textContent=pendingCode;
+  const sel=$('deckSel'),prev=sel.value;
+  sel.replaceChildren(...decks.map((d,ix)=>new Option(`${d.name} (${sum(d.main)}+${sum(d.life)})`,ix)));
+  if(prev&&decks[prev])sel.value=prev;
+  $('openRooms').innerHTML='';
+}
+$('regen').onclick=()=>{pendingCode=genCode();renderLobby()};
+$('nick').value=ls.get('bot.nick','');$('nick').oninput=()=>{ls.set('bot.nick',$('nick').value);pushPresence()};
+function enter(code,{watch=false,isSolo=false}={}){
+  roomCode=code;spectate=watch;solo=isSolo;oppLog.clear();O=null;
+  if(!watch){
+    const saved=ls.get('bot.game.'+code,null);
+    if(saved&&(saved.v===1||saved.v===2)&&!isSolo){G=migrate(saved);pruneArrows()}
+    else{const d=decks[+$('deckSel').value]||decks[0];const w=deckWarnings(d);G=newGame(d,Math.max(0,Math.min(10,+$('startHand').value||0)));log(`เริ่มเกมด้วยเด็ค ${d.name}`);if(w.length)log('หมายเหตุเด็ค: '+w.join(', '));saveG()}
+  }else G=null;
+  if(!isSolo)connectRoom();else{teardown();netStatus('โหมดซ้อม',false)}
+  go('game');onRoom();
+}
+$('createBtn').onclick=()=>enter(pendingCode);
+$('joinBtn').onclick=()=>{const c=$('joinCode').value.trim().toUpperCase();if(c.length<3)return toast('ใส่รหัสห้องก่อน');enter(c)};
+$('watchBtn').onclick=()=>{const c=$('joinCode').value.trim().toUpperCase();if(c.length<3)return toast('ใส่รหัสห้องก่อน');enter(c,{watch:true})};
+$('soloBtn').onclick=()=>enter('SOLO',{isSolo:true});
+$('bLeave').onclick=()=>{teardown();netStatus('ออฟไลน์',false);roomCode=null;G=null;O=null;go('lobby')};
+
+// ---------- menus ----------
+let menuEl=null;
+function closeMenu(){if(menuEl){menuEl.remove();menuEl=null}}
+document.addEventListener('pointerdown',e=>{if(menuEl&&!menuEl.contains(e.target))closeMenu()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeMenu();closeModal();endAim()}});
+function openMenu(anchor,title,items,extra){
+  closeMenu();const m=document.createElement('div');m.className='menu';m.setAttribute('role','menu');
+  if(title){const h=document.createElement('div');h.className='mh';h.textContent=title;m.appendChild(h)}
+  items.forEach(it=>{if(it==='-'){const s=document.createElement('div');s.className='sep';m.appendChild(s);return}
+    const b=document.createElement('button');b.textContent=it[0];b.onclick=()=>{closeMenu();it[1]()};m.appendChild(b)});
+  if(extra)m.appendChild(extra);
+  document.body.appendChild(m);menuEl=m;
+  const r=anchor.getBoundingClientRect(),mw=m.offsetWidth,mh=m.offsetHeight;
+  let x=r.right+6,y=r.top;if(x+mw>innerWidth-8)x=Math.max(8,r.left-mw-6);if(y+mh>innerHeight-8)y=Math.max(8,innerHeight-mh-8);
+  m.style.left=x+'px';m.style.top=y+'px';(m.querySelector('input')||m.querySelector('button'))?.focus();
+}
+
+// ---------- status & targeting ----------
+function statusItems(e,name,el){return [
+  ['เล็งเป้าหมาย (ลูกศร)',()=>startAim(e.u,name)],
+  ...(G.arrows.some(a=>a[0]===e.u)?[['ล้างลูกศรของใบนี้',()=>act(()=>{G.arrows=G.arrows.filter(a=>a[0]!==e.u)},`${name}: ล้างลูกศร`)]]:[]),
+  [e.x?'ยกเลิก “ใช้ Effect แล้ว”':'ใช้ Effect แล้ว ✓',()=>act(()=>{e.x=e.x?0:1},e.x?`${name}: ยกเลิกสถานะใช้ Effect`:`${name}: ใช้ Effect แล้ว`)],
+  ['ใส่สถานะ / โน้ต…',()=>openNote(el,e,name)],
+]}
+function openNote(el,e,name){
+  const box=document.createElement('div');box.style.cssText='display:flex;flex-direction:column;gap:6px;padding:4px;max-width:250px';
+  const inp=document.createElement('input');inp.id='noteInp';inp.maxLength=24;inp.value=e.n||'';inp.placeholder='เช่น โจมตีไม่ได้ถึงจบเทิร์น';
+  const pre=document.createElement('div');pre.className='row';pre.style.gap='4px';
+  ['โจมตีไม่ได้','ถูกเลือกไม่ได้','ใช้ Effect ไม่ได้','จบเทิร์นกลับมือ'].forEach(p=>{const b=document.createElement('button');b.className='ghost';b.style.fontSize='12px';b.style.padding='3px 7px';b.textContent=p;b.onclick=()=>{inp.value=p;inp.focus()};pre.appendChild(b)});
+  const save=v=>{closeMenu();act(()=>{e.n=v},v?`${name}: ${v}`:`${name}: ล้างสถานะ`)};
+  const row=document.createElement('div');row.className='row';
+  const ok=document.createElement('button');ok.className='pri';ok.textContent='บันทึก';ok.onclick=()=>save(inp.value.trim().slice(0,24));
+  const clr=document.createElement('button');clr.textContent='ล้าง';clr.onclick=()=>save('');
+  row.append(ok,clr);inp.onkeydown=ev=>{if(ev.key==='Enter')ok.click()};
+  box.append(inp,pre,row);
+  openMenu(el,name,[],box);
+}
+let aiming=null;
+function startAim(u,name){aiming={u,name};document.body.classList.add('aiming');$('aimHint').textContent=`เลือกเป้าหมายของ ${name} · Esc ยกเลิก`}
+function endAim(){if(!aiming)return;aiming=null;document.body.classList.remove('aiming');$('aimHint').textContent=''}
+document.addEventListener('click',e=>{
+  if(!aiming)return;e.preventDefault();e.stopPropagation();
+  const t=e.target.closest('#v-game [data-u]');const a=aiming;endAim();
+  if(!t||t.dataset.u===a.u)return;const to=t.dataset.u;
+  act(()=>{G.arrows=G.arrows.filter(x=>!(x[0]===a.u&&x[1]===to));G.arrows.push([a.u,to]);while(G.arrows.length>6)G.arrows.shift()},`${a.name} เล็ง → ${t.dataset.label||'เป้าหมาย'}`);
+},true);
+
+const SVGNS='http://www.w3.org/2000/svg';
+const arrowSvg=document.createElementNS(SVGNS,'svg');arrowSvg.id='arrows';arrowSvg.setAttribute('aria-hidden','true');
+arrowSvg.innerHTML='<defs><marker id="ahG" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--gold)"/></marker><marker id="ahR" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--red)"/></marker></defs><g id="arrowG"></g>';
+document.body.appendChild(arrowSvg);
+let arrowRaf=0;
+function drawArrows(){cancelAnimationFrame(arrowRaf);arrowRaf=requestAnimationFrame(drawArrowsNow)}
+function drawArrowsNow(){
+  const g=arrowSvg.querySelector('#arrowG');g.replaceChildren();if(view!=='game'||!roomCode)return;
+  const sets=[];
+  if(G&&!spectate)sets.push([G.arrows,'G']);
+  (spectate?peers.filter(p=>p.pl===1):(O?[O]:[])).forEach((p,k)=>sets.push([p.ar||[],spectate&&k===0?'G':'R']));
+  const find=id=>document.querySelector(`#v-game [data-u="${CSS.escape(id)}"]`);
+  for(const[list,col]of sets)for(const pr of list){
+    const ea=find(pr[0]),eb=find(pr[1]);if(!ea||!eb)continue;
+    const ra=ea.getBoundingClientRect(),rb=eb.getBoundingClientRect();if(!ra.width||!rb.width)continue;
+    const x1=ra.left+ra.width/2,y1=ra.top+ra.height/2,x2=rb.left+rb.width/2,y2=rb.top+rb.height/2;
+    const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy)||1,cut=Math.min(Math.min(rb.width,rb.height)/2,34);
+    const ex=x2-dx/len*cut,ey=y2-dy/len*cut,mx=(x1+ex)/2-dy*.16,my=(y1+ey)/2+dx*.16;
+    const d=`M${x1},${y1} Q${mx},${my} ${ex},${ey}`;
+    const sh=document.createElementNS(SVGNS,'path');sh.setAttribute('d',d);sh.setAttribute('class','arwshadow');
+    const p=document.createElementNS(SVGNS,'path');p.setAttribute('d',d);p.setAttribute('class','arw '+col);p.setAttribute('marker-end',`url(#ah${col})`);
+    const c=document.createElementNS(SVGNS,'circle');c.setAttribute('cx',x1);c.setAttribute('cy',y1);c.setAttribute('r',6);c.setAttribute('class','arwdot '+col);
+    g.append(sh,p,c);
+  }
+}
+addEventListener('resize',drawArrows);addEventListener('scroll',drawArrows,true);
+let modalEl=null;
+function closeModal(){if(modalEl){modalEl.remove();modalEl=null}}
+function openModal(title,cards,onCard,extra){
+  closeModal();const w=document.createElement('div');w.className='modal';
+  w.innerHTML=`<div class="box"><div class="row"><h3 style="flex:1">${esc(title)}</h3><button>ปิด</button></div><div class="grid"></div></div>`;
+  w.querySelector('button').onclick=closeModal;w.onclick=e=>{if(e.target===w)closeModal()};
+  const g=w.querySelector('.grid');
+  if(!cards.length)g.innerHTML='<span class="muted">ไม่มีการ์ด</span>';
+  cards.forEach((i,ix)=>{const c=cardEl(i,{mine:!!onCard});if(onCard)c.onclick=()=>onCard(ix,c);g.appendChild(c)});
+  if(extra)w.querySelector('.box').appendChild(extra);
+  document.body.appendChild(w);modalEl=w;
+}
+
+const toZoneItems=(z,ix,except=[])=>[
+  ['อัญเชิญ → Avatar Zone',()=>move(z,ix,'A')],
+  ['ลง Magic Zone',()=>move(z,ix,'M')],
+  ['ลง Land Magic',()=>move(z,ix,'land')],
+  ['สร้าง → Construct Zone',()=>move(z,ix,'C')],
+  ['ขึ้นมือ',()=>move(z,ix,'hand')],
+  ['ลงนรก',()=>move(z,ix,'H')],
+  ['เนรเทศ → มิติมืด',()=>move(z,ix,'D')],
+  ['กลับบนเด็ค',()=>move(z,ix,'deckTop')],
+  ['ไว้ใต้เด็ค',()=>move(z,ix,'deckBottom')],
+].filter(it=>!except.includes(it[0]));
+
+function handMenu(ix,el){
+  const i=G.hand[ix];const c=CARDS[i];
+  const items=[];
+  if(c.t==='A'||c.t==='T')items.push(['อัญเชิญ → Avatar Zone',()=>move('hand',ix,'A')]);
+  if(c.t==='M'){items.push(['ร่าย → Magic Zone',()=>move('hand',ix,'M')]);if(c.sub==='L')items.push(['ลง Land Magic',()=>move('hand',ix,'land')])}
+  if(c.t==='C')items.push(['สร้าง → Construct Zone',()=>move('hand',ix,'C')]);
+  items.push(['จ่าย Gem (ทิ้งลงนรก)',()=>move('hand',ix,'H',`จ่าย Gem ด้วย ${c.name}${c.gem!=null?' ('+c.gem+' Gem)':''}`)]);
+  items.push([G.reveal.includes(i)?'เลิกเปิดให้ดู':'เปิดให้อีกฝ่ายดู',()=>act(()=>{G.reveal=G.reveal.includes(i)?G.reveal.filter(x=>x!==i):[...G.reveal,i]},G.reveal.includes(i)?null:`เปิดให้ดู: ${c.name}`)]);
+  items.push('-');
+  items.push(...toZoneItems('hand',ix,['ขึ้นมือ','อัญเชิญ → Avatar Zone','สร้าง → Construct Zone','ลง Land Magic']).filter(it=>!(c.t==='M'&&it[0]==='ลง Magic Zone')));
+  items.push(['ลงคว่ำใน Avatar Zone',()=>act(()=>{take('hand',ix);G.A.push({i,s:0,f:1,m:0})},'ลงการ์ดคว่ำ 1 ใบใน Avatar Zone')]);
+  openMenu(el,c.name,items);
+}
+function fieldMenu(z,ix,el){
+  const e=G[z][ix];const c=CARDS[e.i];
+  const items=[
+    [e.s?'ตื่น':'นอน (โจมตี / ใช้แล้ว)',()=>act(()=>{e.s=e.s?0:1},`${c.name} ${e.s?'ตื่น':'นอน'}`)],
+    ['POWER +1',()=>act(()=>{e.m=(e.m||0)+1},`${c.name} POWER ${(e.m||0)+1>=0?'+':''}${(e.m||0)+1}`)],
+    ['POWER −1',()=>act(()=>{e.m=(e.m||0)-1},`${c.name} POWER ${(e.m||0)-1>=0?'+':''}${(e.m||0)-1}`)],
+  ];
+  if(e.m)items.push(['ล้างค่า POWER',()=>act(()=>{e.m=0},`${c.name} ล้าง POWER`)]);
+  items.push('-',...statusItems(e,c.name,el),'-');
+  items.push([e.f?'หงายการ์ด':'คว่ำการ์ด',()=>act(()=>{e.f=e.f?0:1},e.f?`หงาย ${c.name}`:`คว่ำการ์ด 1 ใบ`)]);
+  items.push('-');
+  items.push(['ทำลาย → นรก',()=>move(z,ix,'H',`${c.name} ถูกทำลาย → นรก`)]);
+  items.push(...toZoneItems(z,ix,['ลงนรก',z==='A'?'อัญเชิญ → Avatar Zone':z==='M'?'ลง Magic Zone':'สร้าง → Construct Zone']));
+  openMenu(el,c.name,items);
+}
+function pileMenu(z,el){
+  const name=ZN[z];
+  openModal(`${name} (${G[z].length})`,G[z].slice(),(ix,cel)=>{const i=G[z][ix];openMenu(cel,cn(i),toZoneItems(z,ix,[z==='H'?'ลงนรก':'เนรเทศ → มิติมืด']).map(it=>[it[0],()=>{it[1]();closeModal();pileMenu(z,el)}]))});
+}
+function deckMenu(el){
+  const n=G.deck.length;
+  openMenu(el,`เด็ค (${n} ใบ)`,[
+    ['จั่ว 1 ใบ',()=>draw(1)],['จั่ว 2 ใบ',()=>draw(2)],
+    ['ดูบนสุด 3 ใบ',()=>peekTop(3)],['ดูบนสุด 5 ใบ',()=>peekTop(5)],
+    ['ค้นหาในเด็ค',()=>searchDeck()],
+    ['ธรณีสูบ 1 (บนสุดลงนรก)',()=>act(()=>{const i=G.deck.shift();if(i!=null)G.H.push(i)},'ธรณีสูบ 1 ใบ')],
+    ['ธรณีสูบ 3',()=>act(()=>{for(let k=0;k<3&&G.deck.length;k++)G.H.push(G.deck.shift())},'ธรณีสูบ 3 ใบ')],
+    ['เปิดบนสุดให้ดู',()=>{const i=G.deck[0];if(i!=null)act(()=>{},`เปิดการ์ดบนสุดของเด็ค: ${cn(i)}`)}],
+    ['สับเด็ค',()=>act(()=>shuffle(G.deck),'สับเด็ค')],
+  ]);
+}
+function peekTop(n){
+  const box=document.createElement('p');box.className='note';box.textContent='คลิกการ์ดเพื่อย้าย การ์ดเรียงจากบนสุดไปล่าง';
+  const show=()=>openModal(`ดูบนสุด ${n} ใบ`,G.deck.slice(0,n),(ix,cel)=>openMenu(cel,cn(G.deck[ix]),[
+    ['ขึ้นมือ',()=>{move('deck',ix,'hand',`นำการ์ดจากเด็คขึ้นมือ 1 ใบ`);show()}],
+    ['ลงนรก',()=>{move('deck',ix,'H');show()}],
+    ['ไว้ใต้เด็ค',()=>{move('deck',ix,'deckBottom','ย้ายการ์ดบนเด็คไปไว้ใต้เด็ค 1 ใบ');show()}],
+    ['อัญเชิญ → Avatar Zone',()=>{move('deck',ix,'A');show()}],
+    ['เนรเทศ → มิติมืด',()=>{move('deck',ix,'D');show()}],
+  ]),box);
+  act(()=>{},`ดูการ์ดบนสุดของเด็ค ${n} ใบ`);show();
+}
+function searchDeck(){
+  const done=document.createElement('div');done.className='row';const b=document.createElement('button');b.className='pri';b.textContent='เสร็จแล้ว สับเด็ค';b.onclick=()=>{act(()=>shuffle(G.deck),'สับเด็คหลังค้นหา');closeModal()};done.appendChild(b);
+  const show=()=>{const order=G.deck.map((i,ix)=>[i,ix]).sort((a,b)=>CARDS[a[0]].name.localeCompare(CARDS[b[0]].name,'th'));
+    openModal(`ค้นหาในเด็ค (${G.deck.length})`,order.map(x=>x[0]),(k,cel)=>{const ix=order[k][1];openMenu(cel,cn(G.deck[ix]),[
+      ['ขึ้นมือ',()=>{move('deck',ix,'hand',`ค้นการ์ดจากเด็คขึ้นมือ: ${cn(G.deck[ix])}`);show()}],
+      ['อัญเชิญ → Avatar Zone',()=>{move('deck',ix,'A');show()}],
+      ['ลงนรก',()=>{move('deck',ix,'H');show()}],
+      ['ลง Magic Zone',()=>{move('deck',ix,'M');show()}],
+      ['เนรเทศ → มิติมืด',()=>{move('deck',ix,'D');show()}]])},done)};
+  act(()=>{},'ค้นหาในเด็ค');show();
+}
+function lifeMenu(ix,el){
+  const e=G.life[ix];
+  if(!e.up){act(()=>{e.up=1;G.hits++},`Life ถูกหงาย: ${cn(e.i)}`);return}
+  openMenu(el,cn(e.i),[['เล็งเป้าหมาย (ลูกศร)',()=>startAim(e.u,cn(e.i))],['คว่ำกลับ',()=>act(()=>{e.up=0},`คว่ำ Life ${cn(e.i)} กลับ`)],['ขึ้นมือ',()=>move('life',ix,'hand')],['ลงนรก',()=>move('life',ix,'H')]]);
+}
+
+// ---------- drag & drop (desktop) ----------
+let dragSrc=null;
+function makeDrag(el,z,ix){el.draggable=true;el.addEventListener('dragstart',e=>{dragSrc={z,ix};el.classList.add('dragging');e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain','c')}catch(_){}});el.addEventListener('dragend',()=>{el.classList.remove('dragging');dragSrc=null})}
+function makeDrop(el,to){
+  el.addEventListener('dragover',e=>{if(dragSrc){e.preventDefault();el.classList.add('drop')}});
+  el.addEventListener('dragleave',()=>el.classList.remove('drop'));
+  el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('drop');if(!dragSrc)return;const s=dragSrc;dragSrc=null;
+    if((s.z===to)||(s.z==='hand'&&to==='hand'))return;move(s.z,s.ix,to)});
+}
+
+// ---------- rendering ----------
+function zone(label,extra){const z=document.createElement('div');z.className='zone';z.innerHTML=`<div class="zl"><span>${label}</span><span>${extra||''}</span></div><div class="slots"></div>`;return z}
+function slotsFill(box,n){for(let k=0;k<n;k++){const s=document.createElement('div');s.className='slot';box.appendChild(s)}}
+function pileEl(label,count,topIdx,onClick,drop,isDeck){
+  const z=zone(label,count);z.classList.add('pile');const s=z.querySelector('.slots');
+  if(!count){const e=document.createElement('div');e.className='empty';e.textContent='ว่าง';s.appendChild(e)}
+  else{const c=isDeck?cardEl(null,{back:true,cnt:count}):cardEl(topIdx,{cnt:count});c.classList.add('mine');s.appendChild(c)}
+  if(onClick)s.firstChild.onclick=()=>onClick(s.firstChild);
+  if(drop)makeDrop(z,drop);
+  return z;
+}
+function fieldCard(i,{h=false,rest=false,back=false,mine=false,mod=0,x=0,n='',u=null,label=''}={}){
+  const hidden=back||i==null;
+  const w=document.createElement('div');w.className='fc'+(h||rest?' h':'')+(mine?' mine':'')+(x?' used':'');
+  w.appendChild(hidden?cardEl(null,{back:true}):cardEl(i));
+  if(u){w.dataset.u=u;w.dataset.label=label||(hidden?'การ์ดคว่ำ':cn(i))}
+  if(mod){const s=document.createElement('span');s.className='mod'+(mod<0?' neg':'');s.textContent=(mod>0?'+':'')+mod;w.appendChild(s)}
+  if(x){const s=document.createElement('span');s.className='tagu';s.textContent='✓ ใช้แล้ว';w.appendChild(s)}
+  if(n){const s=document.createElement('span');s.className='tagn';s.textContent=n;s.title=n;w.appendChild(s)}
+  if(mine)w.tabIndex=0;else if(!hidden)w.addEventListener('click',()=>showPreview(i));
+  return w;
+}
+function landMenu(el){
+  const e=G.land;const name=cn(e.i);
+  openMenu(el,name,[...statusItems(e,name,el),'-',['ลงนรก',()=>move('land',0,'H')],['ขึ้นมือ',()=>move('land',0,'hand')],['เนรเทศ → มิติมืด',()=>move('land',0,'D')]]);
+}
+function renderSide(st,mine,host,label){
+  // st: for mine -> G; for others -> public state object
+  host.replaceChildren();
+  const side=document.createElement('div');side.className='side '+(mine?'me':'op');
+  const who=document.createElement('div');who.className='who';
+  if(!st){who.innerHTML=`<span class="dot"></span><span>${esc(label)}</span>`;side.appendChild(who);
+    const p=document.createElement('p');p.className='note';p.style.margin='0';
+    p.textContent=solo?'โหมดซ้อม: ไม่มีคู่แข่ง':roomCode?`รอผู้เล่นอีกคนเข้าห้อง ${roomCode}`:'';side.appendChild(p);host.appendChild(side);return}
+  const pub=!mine;
+  const hand=pub?st.hd:st.hand.length, deckN=pub?st.dk:st.deck.length;
+  const pid=st.pid||'x';
+  const lifeArr=pub?st.lf.map(x=>Array.isArray(x)?{i:x[0]>=0?x[0]:null,up:x[0]>=0,u:x[1]}:{i:x>=0?x:null,up:x>=0}):st.life;
+  who.innerHTML=`<span class="dot"></span><span>${esc(label)}</span><span class="pill">เทิร์น ${pub?st.tn:st.turn}</span><span class="pill">มือ ${hand}</span><span class="pill">เด็ค ${deckN}</span>`;
+  // life zone: one column of sideways cards
+  const up=lifeArr.filter(x=>x.up).length;
+  const life=zone('Life',`${lifeArr.length-up}/${lifeArr.length}`);life.classList.add('lifez');
+  life.dataset.u='life-'+pid;life.dataset.label='Life ของ '+label;
+  const ls_=life.querySelector('.slots');
+  lifeArr.forEach((e,ix)=>{const c=fieldCard(e.up?e.i:null,{h:true,back:!e.up,mine,u:e.u,label:e.up?cn(e.i):'Life คว่ำของ '+label});if(mine)c.onclick=ev=>{ev.stopPropagation();lifeMenu(ix,c)};ls_.appendChild(c)});
+  if(lifeArr.length&&up>=lifeArr.length){const m=document.createElement('div');m.className='lostmsg';m.style.fontSize='12px';m.style.textAlign='center';m.style.maxWidth='var(--ch)';m.textContent=mine?'Life หมด · โดนอีกครั้ง = แพ้':'Life หมด';ls_.appendChild(m)}
+  const ent=e=>pub?{i:e[0]<0?null:e[0],s:e[1],f:e[2],m:e[3],u:e[4],x:e[5],n:e[6]}:e;
+  const fcOf=e=>fieldCard(e.i,{back:!!(e.f||e.i==null),rest:!!e.s,mine,mod:e.m,x:e.x,n:e.n,u:e.u});
+  // avatar zone
+  const A=st.A.map(ent);
+  const av=zone('Avatar Zone',`${A.length}/6`);av.classList.add('z-av');const as=av.querySelector('.slots');
+  A.forEach((e,ix)=>{const c=fcOf(e);if(mine){c.onclick=()=>fieldMenu('A',ix,c);makeDrag(c,'A',ix)}as.appendChild(c)});
+  slotsFill(as,Math.max(0,4-A.length));
+  // construct
+  const C=st.C.map(ent);
+  const co=zone('Construct',`${C.length}/3`);const cs=co.querySelector('.slots');
+  C.forEach((e,ix)=>{const c=fcOf(e);if(mine){c.onclick=()=>fieldMenu('C',ix,c);makeDrag(c,'C',ix)}cs.appendChild(c)});
+  slotsFill(cs,Math.max(0,3-C.length));
+  // magic
+  const M=st.M.map(ent);
+  const mg=zone('Magic Zone',M.length||'');mg.classList.add('z-mg');const ms=mg.querySelector('.slots');
+  M.forEach((e,ix)=>{const c=fcOf(e);if(mine){c.onclick=()=>fieldMenu('M',ix,c);makeDrag(c,'M',ix)}ms.appendChild(c)});
+  // piles
+  const H=pub?st.H:st.H, D=pub?st.D:st.D;
+  const piles=document.createElement('div');piles.className='zrow';
+  piles.append(
+    pileEl('เด็ค',deckN,null,mine?el=>deckMenu(el):null,mine?'deckTop':null,true),
+    pileEl('นรก',H.length,H[H.length-1],el=>mine?pileMenu('H',el):openModal(`นรกของ ${label}`,H.slice()),mine?'H':null),
+    pileEl('มิติมืด',D.length,D[D.length-1],el=>mine?pileMenu('D',el):openModal(`มิติมืดของ ${label}`,D.slice()),mine?'D':null)
+  );
+  if(mine){makeDrop(av,'A');makeDrop(co,'C');makeDrop(mg,'M')}
+  const r1=document.createElement('div');r1.className='zrow';r1.append(av,co);
+  const r2=document.createElement('div');r2.className='zrow';r2.append(mg,piles);
+  const bm=document.createElement('div');bm.className='bmain';
+  const board=document.createElement('div');board.className='board'+(mine?'':' op');
+  if(mine){bm.append(r1,r2);board.append(life,bm)}else{bm.append(r2,r1);board.append(bm,life)}
+  // hand
+  const hd=document.createElement('div');hd.className='hand'+(mine?'':' op');
+  hd.dataset.u='hand-'+pid;hd.dataset.label='มือของ '+label;
+  if(mine){st.hand.forEach((i,ix)=>{const c=cardEl(i,{mine:true});c.onclick=()=>handMenu(ix,c);c.onkeydown=e=>{if(e.key==='Enter')handMenu(ix,c)};makeDrag(c,'hand',ix);hd.appendChild(c)});makeDrop(hd,'hand')}
+  else for(let k=0;k<Math.min(hand,12);k++)hd.appendChild(cardEl(null,{back:true}));
+  if(!hand){const e=document.createElement('span');e.className='muted';e.style.alignSelf='center';e.textContent='ไม่มีการ์ดบนมือ';hd.appendChild(e)}
+  if(mine)side.append(who,board,hd);else side.append(who,hd,board);
+  host.appendChild(side);
+}
+function render(){
+  if(view!=='game')return;
+  const players=peers.filter(p=>p.pl===1);
+  if(!roomCode){$('opSide').innerHTML='<p class="note">ยังไม่ได้เข้าห้อง กลับไปที่ “เข้าห้อง” เพื่อเริ่ม</p>';$('meSide').replaceChildren();$('myCtl').hidden=true;return}
+  $('myCtl').hidden=spectate;
+  if(spectate){renderSide(players[0]||null,false,$('opSide'),players[0]?.nm||'ผู้เล่น 1');renderSide(players[1]||null,false,$('meSide'),players[1]?.nm||'ผู้เล่น 2')}
+  else{renderSide(O,false,$('opSide'),O?O.nm:'คู่แข่ง');renderSide(G,true,$('meSide'),nick()+' (คุณ)')}
+  // land magic (shared)
+  const lands=[];if(G&&G.land&&!spectate)lands.push({i:G.land.i,ts:G.landTs,u:G.land.u,x:G.land.x,n:G.land.n,mine:true});
+  (spectate?players:O?[O]:[]).forEach(p=>{if(p.ld)lands.push({i:p.ld[0],ts:p.ld[1],u:p.ld[2],x:p.ld[3],n:p.ld[4],mine:false,who:p.nm})});
+  lands.sort((a,b)=>b.ts-a.ts);const L=lands[0];const ls_=$('landSlot');ls_.replaceChildren();$('landOwner').textContent='';
+  if(L){const c=fieldCard(L.i,{h:true,mine:L.mine,u:L.u,x:L.x,n:L.n});if(L.mine)c.onclick=()=>landMenu(c);ls_.appendChild(c);$('landOwner').textContent=L.mine?'ของคุณ':'ของ '+(L.who||'คู่แข่ง')}
+  else{const s=document.createElement('div');s.className='slot h';ls_.appendChild(s)}
+  if(G&&!spectate)makeDropOnce(ls_,'land');
+  // revealed
+  const rv=$('revealRow');rv.replaceChildren();
+  const showRv=(arr,who)=>{if(!arr||!arr.length)return;const l=document.createElement('span');l.className='lbl';l.textContent='เปิดให้ดู · '+who;rv.appendChild(l);arr.forEach(i=>rv.appendChild(cardEl(i)))};
+  if(spectate)players.forEach(p=>showRv(p.rv,p.nm));else{if(O)showRv(O.rv,O.nm);if(G)showRv(G.reveal,'คุณ')}
+  const nAr=G&&!spectate?G.arrows.length:0;$('bArrows').hidden=!nAr;$('bArrows').textContent=`ล้างลูกศร (${nAr})`;
+  renderLog();drawArrows();
+}
+const dropped=new WeakSet();function makeDropOnce(el,to){if(dropped.has(el))return;dropped.add(el);makeDrop(el,to)}
+function renderLog(){
+  const items=[];if(G&&!spectate)G.log.forEach(e=>items.push({t:e.t,x:e.x,me:true}));
+  oppLog.forEach(e=>items.push({t:e.t,x:e.x,me:false,who:e.who}));
+  items.sort((a,b)=>a.t-b.t);
+  const box=$('log');const atBottom=box.scrollHeight-box.scrollTop-box.clientHeight<30;
+  box.replaceChildren(...items.slice(-80).map(e=>{const d=document.createElement('div');d.className='e '+(e.me?'me':'op');const w=document.createElement('i');w.textContent=e.me?'●':'●';const t=document.createElement('span');t.textContent=(e.me?'':((e.who||'คู่แข่ง')+': '))+e.x;d.append(w,t);return d}));
+  if(atBottom)box.scrollTop=box.scrollHeight;
+}
+
+// ---------- turn controls ----------
+$('bDraw').onclick=()=>draw(1);
+$('bWake').onclick=()=>act(()=>{[...G.A,...G.C,...G.M].forEach(e=>{e.s=0;e.x=0});if(G.land)G.land.x=0},'ปลุกการ์ดทั้งหมด และล้างสถานะ “ใช้ Effect แล้ว”');
+$('bArrows').onclick=()=>act(()=>{G.arrows=[]},'ล้างลูกศร');
+$('bEnd').onclick=()=>act(()=>{G.turn++;G.arrows=[]},'จบเทิร์น');
+$('bCoin').onclick=()=>act(()=>{},'ทอยเหรียญ: '+(Math.random()<.5?'หัว':'ก้อย'));
+$('bDice').onclick=()=>act(()=>{},'ทอยเต๋า: '+(1+Math.floor(Math.random()*6)));
+$('bMull').onclick=()=>{const n=G.hand.length;act(()=>{G.deck.push(...G.hand);G.hand=[];shuffle(G.deck);G.hand=G.deck.splice(0,n)},`Mulligan (จั่วใหม่ ${n} ใบ)`)};
+$('bNew').onclick=e=>{const b=e.currentTarget;if(!b.dataset.sure){b.dataset.sure=1;b.textContent='กดอีกครั้งเพื่อยืนยัน';setTimeout(()=>{delete b.dataset.sure;b.textContent='เริ่มเกมใหม่'},2500);return}
+  delete b.dataset.sure;b.textContent='เริ่มเกมใหม่';const d=decks[+$('deckSel').value]||decks[0];G=newGame(d,Math.max(0,Math.min(10,+$('startHand').value||0)));log(`เริ่มเกมใหม่ด้วยเด็ค ${d.name}`);saveG();render();pushPresence()};
+
+// ---------- boot ----------
+renderLobby();
+netStatus(window.Peer?'พร้อมเล่นออนไลน์':'โหลดระบบออนไลน์ไม่ได้',!!window.Peer);
+})();
+</script>
+
+</html>
