@@ -30,6 +30,7 @@ html,body{height:100%}
 body{margin:0;background:var(--ink);color:var(--fg);font-family:var(--f-body);font-size:14px;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px;
   background-image:radial-gradient(ellipse at 50% 50%,#1e1a2a 0,var(--ink) 70%)}
+[hidden]{display:none!important}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;background:var(--mat2);border:1px solid var(--line);border-radius:7px;padding:6px 11px;line-height:1.2}
 button:hover{border-color:var(--gold)}
@@ -185,6 +186,43 @@ body.aiming #v-game [data-u]:hover{outline-style:solid;outline-width:3px}
 .field{display:flex;flex-direction:column;gap:4px}
 .note{font-size:13px;color:var(--mute);line-height:1.5}
 .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--mat2);border:1px solid var(--gold);padding:8px 14px;border-radius:9px;z-index:60;font-family:var(--f-disp)}
+/* one-screen table: each side is one row of zones + its hand; card size is set from the window by sizeBoard() */
+.game{grid-template-columns:minmax(0,1fr) 250px;gap:10px;align-items:start}
+.gcol{display:flex;flex-direction:column;gap:5px;min-width:0}
+.side{padding:5px 7px;gap:4px;border-radius:10px}
+.side .who{font-size:13px;gap:6px;line-height:1.1}
+.side .who .pill{font-size:11px;padding:1px 7px}
+.board{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 6px;align-items:stretch}
+.board.op{grid-template-columns:minmax(0,1fr) auto}
+.board .lifez{min-height:0}
+.lifez .slots{flex:1 1 0;min-height:0;overflow:hidden;justify-content:flex-start;padding-block:2px}
+.lifez .fc+.fc{margin-top:0}
+.zrow1{display:flex;gap:5px;min-width:0;align-items:stretch}
+.zrow1>.zone{min-width:0}
+.zone{padding:3px 4px;gap:2px}
+.zone .zl{font-size:9.5px}
+.z-av{flex:4 1 0}.z-co{flex:3 1 0}.z-mg{flex:2.6 1 0}
+.zrow1 .slots{flex-wrap:nowrap;overflow:hidden;gap:5px}
+.piles{display:flex;gap:5px;flex:none}
+.hand{flex-wrap:nowrap;overflow:hidden;justify-content:safe center;min-height:calc(var(--ch) + 8px);padding:4px;gap:5px}
+.hand.op{min-height:calc(var(--ch)*.5 + 8px)}
+.card.mini{width:calc(var(--cw)*.5);height:calc(var(--ch)*.5)}
+.card.back.mini::after{content:none}
+.mid{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;padding:0 4px}
+.mid .land{flex-direction:row;gap:8px;align-items:center}
+.landtxt{display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:11.5px}
+.reveal{gap:4px}
+.reveal .card{width:calc(var(--cw)*.6);height:calc(var(--ch)*.6)}
+.rail{position:sticky;top:10px;max-height:calc(100vh - 20px);gap:8px}
+.preview{width:auto;height:min(40vh,340px);max-width:100%;flex:none}
+.pinfo{font-size:12.5px}
+.ctl{display:flex;flex-wrap:wrap;gap:5px}
+.ctl button{padding:5px 9px;font-size:13px}
+.log{flex:1 1 auto;min-height:70px;max-height:none}
+@media (max-width:1100px){.game{grid-template-columns:minmax(0,1fr)}.rail{position:static;max-height:none;order:2}}
+/* deck code import */
+.importbox textarea{width:100%;font-family:ui-monospace,Consolas,monospace;font-size:13px}
+.impsum{font-size:13px;line-height:1.5}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -251,7 +289,8 @@ body.aiming #v-game [data-u]:hover{outline-style:solid;outline-width:3px}
         <div class="results" id="results"></div>
       </div>
       <div class="decklist">
-        <div class="row"><input id="deckName" placeholder="ชื่อเด็ค" style="flex:1"><button id="saveDeck" class="pri">บันทึก</button></div>
+        <button id="importCode" class="pri" style="width:100%">วางรหัสเด็คจาก bottcg.com</button>
+        <div class="row"><input id="deckName" placeholder="ชื่อเด็ค" style="flex:1"><button id="saveDeck">บันทึก</button></div>
         <div class="row" style="font-size:13px">
           <span>เด็คหลัก <b id="mainCount" class="count">0</b>/50</span>
           <span>Life <b id="lifeCount" class="count">0</b>/5</span>
@@ -276,32 +315,28 @@ body.aiming #v-game [data-u]:hover{outline-style:solid;outline-width:3px}
   <!-- GAME -->
   <section id="v-game" hidden>
     <div class="game">
-      <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
+      <div class="gcol">
         <div id="opSide"></div>
         <div class="mid">
-          <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0"><div id="aimHint"></div><button id="bArrows" hidden>ล้างลูกศร</button></div>
-          <div class="land"><span class="lbl">Land Magic</span><div id="landSlot"></div><span id="landOwner" class="muted" style="font-size:12px"></span></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0"><div id="aimHint"></div><button id="bArrows" hidden>ล้างลูกศร</button></div>
+          <div class="land"><div class="landtxt"><span class="lbl">Land Magic</span><span id="landOwner" class="muted"></span></div><div id="landSlot"></div></div>
           <div class="reveal" id="revealRow"></div>
         </div>
         <div id="meSide"></div>
-        <div class="row" id="myCtl" style="justify-content:space-between">
-          <div class="turnctl">
-            <button id="bDraw">จั่ว 1</button>
-            <button id="bWake">ตื่นทั้งหมด</button>
-            <button id="bEnd" class="pri">จบเทิร์น</button>
-          </div>
-          <div class="turnctl">
-            <button id="bCoin" class="ghost">ทอยเหรียญ</button>
-            <button id="bDice" class="ghost">ทอยเต๋า</button>
-            <button id="bMull" class="ghost">Mulligan</button>
-            <button id="bNew" class="ghost">เริ่มเกมใหม่</button>
-            <button id="bLeave" class="ghost">ออกจากห้อง</button>
-          </div>
-        </div>
       </div>
       <aside class="rail">
         <div class="preview" id="preview"></div>
         <div class="pinfo" id="pinfo"><span class="muted">ชี้หรือแตะการ์ดเพื่อดูรายละเอียด</span></div>
+        <div id="myCtl" class="ctl">
+          <button id="bDraw">จั่ว 1</button>
+          <button id="bWake">ตื่นทั้งหมด</button>
+          <button id="bEnd" class="pri">จบเทิร์น</button>
+          <button id="bCoin" class="ghost">ทอยเหรียญ</button>
+          <button id="bDice" class="ghost">ทอยเต๋า</button>
+          <button id="bMull" class="ghost">Mulligan</button>
+          <button id="bNew" class="ghost">เริ่มเกมใหม่</button>
+          <button id="bLeave" class="ghost">ออกจากห้อง</button>
+        </div>
         <div class="lbl">บันทึกการเล่น</div>
         <div class="log" id="log"></div>
       </aside>
@@ -2296,13 +2331,78 @@ function renderDB(){renderDeckList();renderResults()}
 ['q','fType','fColor','fCost','fSet'].forEach(id=>$(id).addEventListener('input',()=>renderResults()));
 $('saveDeck').onclick=()=>{cur.name=$('deckName').value.trim()||'เด็คไม่มีชื่อ';const ix=decks.findIndex(d=>d.name===cur.name);if(ix>=0)decks[ix]=JSON.parse(JSON.stringify(cur));else decks.push(JSON.parse(JSON.stringify(cur)));ls.set('bot.decks',decks);renderDeckList();renderLobby();toast('บันทึกเด็คแล้ว')};
 $('newDeck').onclick=()=>{cur={name:'',main:{},life:{}};renderDeckList();renderResults(false)};
-$('exportTxt').onclick=()=>{const lines=['# Main',...sortEntries(cur.main).map(([c,q])=>q+' '+key(c)),'# Life',...sortEntries(cur.life).map(([c,q])=>q+' '+key(c))];$('deckText').value=lines.join('\n');$('deckText').select();try{navigator.clipboard.writeText($('deckText').value).then(()=>toast('คัดลอกแล้ว'),()=>{})}catch(e){}};
+// Deck code, as bottcg.com's "รหัสเด็ค" copies it:
+//   # deck name / # Main Deck / 3x BT01-002-SR / # Life Card / 1x SD01-021-C / # Side Deck ...
+// The rarity suffix only matters for special prints (SCR, PR, CBR); side deck lines are skipped.
+const SPECIAL=new Set(['SCR','PR','CBR']);
+function parseDeckCode(text){
+  const d={name:'',main:{},life:{}};const miss=[];let skip=false;
+  for(const raw of String(text).split(/\r?\n/)){
+    const l=raw.trim();if(!l)continue;
+    if(l.startsWith('#')){const h=l.replace(/^#+\s*/,'').trim();
+      if(/side/i.test(h)){skip=true;continue}skip=false;
+      if(!d.name&&!/^(main|life|ไลฟ์|เด็คหลัก)/i.test(h))d.name=h;continue}
+    if(skip)continue;
+    let q,print,rar;
+    let m=l.match(/^(\d+)\s*[x×]?\s*([A-Za-z0-9]+-\d+)(?:-([A-Za-z]+))?/);
+    if(m){q=+m[1];print=m[2];rar=m[3]}
+    else if((m=l.match(/^([A-Za-z0-9]+-\d+)(?:-([A-Za-z]+))?\s*[x×]\s*(\d+)/))){print=m[1];rar=m[2];q=+m[3]}
+    else continue;
+    print=print.toUpperCase();rar=(rar||'').toUpperCase();
+    const c=(SPECIAL.has(rar)&&BYKEY.get(print+'-'+rar))||BYKEY.get(print);
+    if(!c){miss.push(print+(rar?'-'+rar:''));continue}
+    if(c.t==='T')continue;
+    const part=c.t==='L'?d.life:d.main;part[key(c)]=(part[key(c)]||0)+q;
+  }
+  return {d,miss};
+}
+function deckCode(d){
+  const line=([c,q])=>`${q}x ${key(c)}`;
+  return [`# ${d.name||'เด็ค'}`,'','# Main Deck',...sortEntries(d.main).map(line),'','# Life Card',...sortEntries(d.life).map(line)].join('\n');
+}
+function saveDeckAs(d,replaceIx){
+  if(replaceIx>=0)decks[replaceIx]=d;else decks.push(d);
+  ls.set('bot.decks',decks);cur=JSON.parse(JSON.stringify(d));
+  renderDeckList();renderResults(false);renderLobby();
+}
+$('importCode').onclick=()=>{
+  closeModal();const w=document.createElement('div');w.className='modal';
+  w.innerHTML=`<div class="box importbox" style="width:min(640px,100%)">
+    <div class="row"><h3 style="flex:1">วางรหัสเด็ค</h3><button id="impClose">ปิด</button></div>
+    <p class="note" style="margin:0">ที่ bottcg.com เปิดเด็ค กด <b>รหัสเด็ค</b> แล้วกด <b>คัดลอกรหัส</b> จากนั้นวางที่นี่ ถ้าชื่อเด็คซ้ำกับที่มีอยู่ จะเลือกอัปเดตเด็คเดิมหรือบันทึกเป็นเด็คใหม่ก็ได้</p>
+    <textarea id="impText" rows="12" placeholder="# ชื่อเด็ค&#10;&#10;# Main Deck&#10;3x BT01-002-SR&#10;2x BT01-038-SR&#10;…"></textarea>
+    <input id="impName" placeholder="ชื่อเด็ค">
+    <div class="impsum" id="impSum"></div>
+    <div class="row" id="impBtns"></div></div>`;
+  document.body.appendChild(w);modalEl=w;
+  w.onclick=e=>{if(e.target===w)closeModal()};w.querySelector('#impClose').onclick=closeModal;
+  const ta=w.querySelector('#impText'),nm=w.querySelector('#impName'),sum=w.querySelector('#impSum'),btns=w.querySelector('#impBtns');
+  let parsed=null,nameTouched=false;
+  const update=()=>{
+    parsed=parseDeckCode(ta.value);const d=parsed.d;
+    if(!nameTouched)nm.value=d.name||'';
+    const name=nm.value.trim()||'เด็คนำเข้า';
+    const m=sum_(d.main),l=sum_(d.life);
+    sum.innerHTML=ta.value.trim()?`เด็คหลัก <b class="count ${m===50?'ok':'bad'}">${m}</b>/50 · Life <b class="count ${l===5?'ok':'bad'}">${l}</b>/5`+
+      (parsed.miss.length?`<br><span class="warn">ไม่พบการ์ด: ${esc(parsed.miss.join(', '))}</span>`:''):'';
+    btns.replaceChildren();if(!m&&!l)return;
+    const ix=decks.findIndex(x=>x.name===name);
+    const mk=(t,cls,fn)=>{const b=document.createElement('button');b.textContent=t;if(cls)b.className=cls;b.onclick=fn;btns.appendChild(b)};
+    const deck=()=>({name,main:d.main,life:d.life});
+    if(ix>=0){
+      mk(`อัปเดตเด็ค “${name}”`,'pri',()=>{saveDeckAs(deck(),ix);closeModal();toast('อัปเดตเด็คแล้ว')});
+      mk('บันทึกเป็นเด็คใหม่','',()=>{let n=2;while(decks.some(x=>x.name===`${name} (${n})`))n++;saveDeckAs({...deck(),name:`${name} (${n})`},-1);closeModal();toast('บันทึกเด็คใหม่แล้ว')});
+    }else mk('บันทึกเด็ค','pri',()=>{saveDeckAs(deck(),-1);closeModal();toast('บันทึกเด็คแล้ว')});
+  };
+  const sum_=o=>Object.values(o).reduce((a,b)=>a+b,0);
+  ta.addEventListener('input',update);nm.addEventListener('input',()=>{nameTouched=true;update()});
+  ta.focus();
+};
+$('exportTxt').onclick=()=>{$('deckText').value=deckCode({...cur,name:$('deckName').value.trim()||cur.name});$('deckText').select();try{navigator.clipboard.writeText($('deckText').value).then(()=>toast('คัดลอกแล้ว'),()=>{})}catch(e){}};
 $('importTxt').onclick=()=>{
-  const d={name:cur.name||'เด็คนำเข้า',main:{},life:{}};const miss=[];
-  $('deckText').value.split('\n').forEach(l=>{const m=l.trim().match(/^(\d+)\s*[x×]?\s+([A-Za-z0-9]+-\d+[A-Za-z]*(?:-[A-Z]+)?)/i)||l.trim().match(/^([A-Za-z0-9]+-\d+(?:-[A-Z]+)?)\s*[x×]\s*(\d+)/i);
-    if(!m)return;let q,k;if(/^\d+$/.test(m[1])){q=+m[1];k=m[2].toUpperCase()}else{k=m[1].toUpperCase();q=+m[2]}
-    const c=BYKEY.get(k);if(!c){miss.push(k);return}const part=c.t==='L'?d.life:d.main;part[k]=(part[k]||0)+q});
-  cur=d;renderDeckList();renderResults(false);toast(miss.length?'ไม่รู้จัก: '+miss.join(', '):'นำเข้าแล้ว');
+  const {d,miss}=parseDeckCode($('deckText').value);
+  cur={name:d.name||cur.name||'เด็คนำเข้า',main:d.main,life:d.life};renderDeckList();renderResults(false);
+  toast(miss.length?'ไม่พบการ์ด: '+miss.join(', '):'นำเข้าแล้ว · กดบันทึกเพื่อเก็บเด็ค');
 };
 
 // ---------- game state ----------
@@ -2701,25 +2801,27 @@ function renderSide(st,mine,host,label){
   M.forEach((e,ix)=>{const c=fcOf(e);if(mine){c.onclick=()=>fieldMenu('M',ix,c);makeDrag(c,'M',ix)}ms.appendChild(c)});
   // piles
   const H=pub?st.H:st.H, D=pub?st.D:st.D;
-  const piles=document.createElement('div');piles.className='zrow';
+  const piles=document.createElement('div');piles.className='piles';
   piles.append(
     pileEl('เด็ค',deckN,null,mine?el=>deckMenu(el):null,mine?'deckTop':null,true),
     pileEl('นรก',H.length,H[H.length-1],el=>mine?pileMenu('H',el):openModal(`นรกของ ${label}`,H.slice()),mine?'H':null),
     pileEl('มิติมืด',D.length,D[D.length-1],el=>mine?pileMenu('D',el):openModal(`มิติมืดของ ${label}`,D.slice()),mine?'D':null)
   );
   if(mine){makeDrop(av,'A');makeDrop(co,'C');makeDrop(mg,'M')}
-  const r1=document.createElement('div');r1.className='zrow';r1.append(av,co);
-  const r2=document.createElement('div');r2.className='zrow';r2.append(mg,piles);
-  const bm=document.createElement('div');bm.className='bmain';
-  const board=document.createElement('div');board.className='board'+(mine?'':' op');
-  if(mine){bm.append(r1,r2);board.append(life,bm)}else{bm.append(r2,r1);board.append(bm,life)}
+  co.classList.add('z-co');
+  const r1=document.createElement('div');r1.className='zrow1';r1.append(av,co,mg,piles);
   // hand
   const hd=document.createElement('div');hd.className='hand'+(mine?'':' op');
   hd.dataset.u='hand-'+pid;hd.dataset.label='มือของ '+label;
   if(mine){st.hand.forEach((i,ix)=>{const c=cardEl(i,{mine:true});c.onclick=()=>handMenu(ix,c);c.onkeydown=e=>{if(e.key==='Enter')handMenu(ix,c)};makeDrag(c,'hand',ix);hd.appendChild(c)});makeDrop(hd,'hand')}
-  else for(let k=0;k<Math.min(hand,12);k++)hd.appendChild(cardEl(null,{back:true}));
+  else for(let k=0;k<Math.min(hand,12);k++){const c=cardEl(null,{back:true});c.classList.add('mini');hd.appendChild(c)}
   if(!hand){const e=document.createElement('span');e.className='muted';e.style.alignSelf='center';e.textContent='ไม่มีการ์ดบนมือ';hd.appendChild(e)}
-  if(mine)side.append(who,board,hd);else side.append(who,hd,board);
+  // grid: Life column beside the zone row and the hand (left for you, right for the opponent)
+  const board=document.createElement('div');board.className='board'+(mine?'':' op');
+  const at=(el,col,row)=>{el.style.gridColumn=col;el.style.gridRow=row;return el};
+  if(mine)board.append(at(life,'1','1 / 3'),at(r1,'2','1'),at(hd,'2','2'));
+  else board.append(at(hd,'1','1'),at(r1,'1','2'),at(life,'2','1 / 3'));
+  side.append(who,board);
   host.appendChild(side);
 }
 function render(){
@@ -2741,8 +2843,48 @@ function render(){
   const showRv=(arr,who)=>{if(!arr||!arr.length)return;const l=document.createElement('span');l.className='lbl';l.textContent='เปิดให้ดู · '+who;rv.appendChild(l);arr.forEach(i=>rv.appendChild(cardEl(i)))};
   if(spectate)players.forEach(p=>showRv(p.rv,p.nm));else{if(O)showRv(O.rv,O.nm);if(G)showRv(G.reveal,'คุณ')}
   const nAr=G&&!spectate?G.arrows.length:0;$('bArrows').hidden=!nAr;$('bArrows').textContent=`ล้างลูกศร (${nAr})`;
-  renderLog();drawArrows();
+  renderLog();sizeBoard();
 }
+// ---------- fit both players on one screen ----------
+// Overlap cards in a row (or the Life column) when they don't fit, instead of wrapping.
+function fitLine(el,vertical){
+  const kids=[...el.children].filter(k=>!k.hidden&&!k.classList.contains('lostmsg'));
+  el.querySelectorAll(':scope>.slot').forEach(s=>s.hidden=false);
+  kids.forEach(k=>{k.style.marginLeft='';k.style.marginTop=''});
+  const over=()=>vertical?el.scrollHeight-el.clientHeight:el.scrollWidth-el.clientWidth;
+  if(over()<=1)return;
+  el.querySelectorAll(':scope>.slot').forEach(s=>s.hidden=true);
+  const live=kids.filter(k=>!k.classList.contains('slot'));
+  const o=over();if(o<=1||live.length<2)return;
+  const step=Math.ceil(o/(live.length-1));
+  live.slice(1).forEach(k=>{if(vertical)k.style.marginTop=-step+'px';else k.style.marginLeft=-step+'px'});
+}
+function fitAll(){
+  document.querySelectorAll('#v-game .zrow1 .slots, #v-game .hand').forEach(el=>fitLine(el,false));
+  document.querySelectorAll('#v-game .lifez .slots').forEach(el=>fitLine(el,true));
+}
+// Pick a card size that lets the opponent's side, Land Magic and your side all fit the window.
+function sizeBoard(){
+  const g=$('v-game');
+  if(view!=='game'||g.hidden){drawArrows();return}
+  const set=v=>{g.style.setProperty('--cw',v+'px');g.style.setProperty('--ch',(v*1.36)+'px')};
+  if(innerWidth<1100){g.style.removeProperty('--cw');g.style.removeProperty('--ch');fitAll();drawArrows();return}
+  const col=g.querySelector('.gcol'),rail=g.querySelector('.rail');
+  const W=col.clientWidth;
+  // the board decides the card size; the side panel just fits whatever height is left
+  const bottomPad=parseFloat(getComputedStyle(document.documentElement).paddingBottom)||0;
+  const overBy=()=>col.getBoundingClientRect().bottom+scrollY+10+bottomPad-innerHeight;
+  let cw=Math.max(34,Math.min(112,(innerHeight-240)/4.3/1.36,W/16.5));set(cw);
+  for(let k=0;k<8;k++){
+    const over=overBy();if(over<=0||cw<=34)break;
+    cw=Math.max(34,cw-over/4.3/1.36-1);set(cw);
+  }
+  // grow back if there is spare room
+  for(let k=0;k<4;k++){const spare=-overBy();if(spare<8||cw>=112||cw>=W/16.5)break;const n=Math.min(112,W/16.5,cw+spare/4.3/1.36);set(n);if(overBy()>0){set(cw);break}cw=n}
+  rail.style.maxHeight=Math.max(260,innerHeight-rail.getBoundingClientRect().top-10-bottomPad)+'px';
+  fitAll();drawArrows();
+}
+addEventListener('resize',sizeBoard);
 const dropped=new WeakSet();function makeDropOnce(el,to){if(dropped.has(el))return;dropped.add(el);makeDrop(el,to)}
 function renderLog(){
   const items=[];if(G&&!spectate)G.log.forEach(e=>items.push({t:e.t,x:e.x,me:true}));
