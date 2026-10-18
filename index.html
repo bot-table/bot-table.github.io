@@ -299,7 +299,7 @@ body.ingame .brand{font-size:15px}
         </ol>
         <p class="note" style="margin:0">เกมไม่บังคับกติกา ผู้เล่นจัดการเองเหมือนเล่นบนโต๊ะจริง: คลิกการ์ดเพื่อเลือกคำสั่ง หรือลากวางลงโซน (บนคอม) จ่าย Gem = ทิ้งการ์ดบนมือลงนรก</p>
         <p class="note" style="margin:0">รีเฟรชหน้าแล้วกลับเข้าห้องรหัสเดิม กระดานจะกลับมาเหมือนเดิม</p>
-        <p class="note" style="margin:0">สองเครื่องเชื่อมกันตรง ถ้าขึ้นว่าต่อไม่ได้นานเกิน 15 วินาที ลองเปลี่ยนไปใช้เน็ตมือถือ เพราะ Wi-Fi บางที่ (เช่นที่ทำงาน) บล็อกการเชื่อมต่อแบบนี้</p>
+        <p class="note" style="margin:0">ข้อมูลบนโต๊ะส่งผ่านเซิร์ฟเวอร์สาธารณะฟรี 3 แห่งพร้อมกัน (ไม่รวมการ์ดบนมือและลำดับเด็ค) ถ้าขึ้นว่าเชื่อมต่อไม่ได้ ลองเปลี่ยนไปใช้เน็ตมือถือ เพราะ Wi-Fi บางที่ (เช่นที่ทำงาน) บล็อกการเชื่อมต่อแบบนี้</p>
         <p class="note" style="margin:0;font-size:12px">รูปและข้อมูลการ์ด Battle of Talingchan เป็นของ Lion House / Pasulol ดึงจาก bottcg.com ใช้สำหรับเล่นกันเอง</p>
         <div id="openRooms" class="note"></div>
       </div>
@@ -376,7 +376,7 @@ body.ingame .brand{font-size:15px}
   </section>
 </div>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script type="text/plain" id="carddb">พระอิศวร|A|SD01-001|6|5|R|เทพ|||2||
 พระนารายณ์|A|SD01-002|4|4|R|เทพ|||1||
 พระอินทร์|A|SD01-003|2|2|R|เทพ|||2||
@@ -2511,10 +2511,16 @@ function attMenu(e){
 }
 function draw(n=1){act(()=>{for(let k=0;k<n&&G.deck.length;k++)G.hand.push(G.deck.shift())},`จั่ว ${n} ใบ`)}
 
-// ---------- online: browsers connect to each other directly (PeerJS) ----------
-const PREFIX='bottcg-tl-v1-';
-let peer=null,hostConn=null,conns=new Map(),states=new Map(),isHost=false,myId=null,netGen=0,pushT=null;
+// ---------- online: room state relayed through free public MQTT servers ----------
+// Every player publishes their public table state to bottcg-tl/v2/<room>/<player id> (kept by the server,
+// so someone joining later sees it at once) and listens to everyone in it. Three servers are used at once,
+// so the room keeps working if one of them is down or blocked.
+const BROKERS=(()=>{const q=new URLSearchParams(location.search).get('broker');
+  return q?[q]:['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt','wss://test.mosquitto.org:8081/mqtt']})();
+const TOPIC='bottcg-tl/v2/';
+let clients=[],states=new Map(),netGen=0,pushT=null,beatT=null;
 let peers=[];
+const myId=(()=>{try{let v=sessionStorage.getItem('bot.mid');if(!v){v=rid()+rid();sessionStorage.setItem('bot.mid',v)}return v}catch(e){return rid()+rid()}})();
 function netStatus(t,on){const p=$('netpill');p.textContent=t;p.className='pill'+(on?' on':'')}
 function publicState(){
   if(!G||spectate)return {g:roomCode,nm:nick(),pl:0};
@@ -2535,46 +2541,57 @@ function decodeState(st){if(!st||!st.pl)return st||{};const d=a=>{if(!Array.isAr
   const ld=st.ld&&I(st.ld[0])>=0?[I(st.ld[0]),...st.ld.slice(1)]:null;
   return {...st,lf:(st.lf||[]).map(d),A:(st.A||[]).map(d),C:(st.C||[]).map(d),M:(st.M||[]).map(d),H:(st.H||[]).map(I).filter(ok),D:(st.D||[]).map(I).filter(ok),ld,rv:(st.rv||[]).map(I).filter(ok),ar:st.ar||[]}}
 const myState=()=>encodeState(publicState());
-function pushPresence(){
-  if(!roomCode||solo)return;clearTimeout(pushT);
-  pushT=setTimeout(()=>{const st=myState();if(isHost){states.set(myId,st);broadcast()}else if(hostConn&&hostConn.open){try{hostConn.send({t:'st',st})}catch(e){}}},80);
+const myTopic=()=>TOPIC+roomCode+'/'+myId;
+function publishMine(){
+  if(!roomCode||solo)return;
+  const msg=JSON.stringify({t:Date.now(),st:myState()});
+  clients.forEach(c=>{if(c.connected){try{c.publish(myTopic(),msg,{retain:true,qos:0})}catch(e){}}});
 }
-function broadcast(){
-  const list=[...states].map(([id,st])=>({id,st}));
-  for(const c of conns.values())if(c.open){try{c.send({t:'all',list})}catch(e){}}
-  netStatus(conns.size?`ห้อง ${roomCode} · ออนไลน์ ${conns.size+1} คน`:`ห้อง ${roomCode} · รออีกฝ่าย`,true);
+function pushPresence(){if(!roomCode||solo)return;clearTimeout(pushT);pushT=setTimeout(publishMine,80)}
+function onMsg(topic,buf){
+  const id=topic.split('/').pop();if(id===myId)return;
+  const s=buf&&buf.length?String(buf):'';
+  if(!s){if(states.delete(id))refresh();return}
+  let m;try{m=JSON.parse(s)}catch(e){return}
+  if(!m||!m.st||typeof m.t!=='number')return;
+  if(Date.now()-m.t>10*60*1000)return;            // left over from an old session
+  const cur=states.get(id);
+  if(cur&&cur.t>=m.t){cur.r=Date.now();return}   // same update arriving from another server
+  states.set(id,{t:m.t,r:Date.now(),st:m.st});refresh();
+}
+function refresh(){
+  const now=Date.now();
+  for(const[id,v]of states)if(now-v.r>70000)states.delete(id);   // no heartbeat for 70 s: gone
+  const list=[...states].map(([id,v])=>({id,st:v.st}));
+  const n=list.filter(x=>x.st&&x.st.g===roomCode).length;
+  if(clients.some(c=>c.connected))netStatus(n?`ห้อง ${roomCode} · ออนไลน์ ${n+1} คน`:`ห้อง ${roomCode} · รออีกฝ่าย`,true);
   applyList(list);
 }
 function applyList(list){peers=(list||[]).filter(x=>x&&x.id!==myId&&x.st&&x.st.g===roomCode).map(x=>({peer:x.id,...decodeState(x.st)}));onRoom()}
-function teardown(){netGen++;clearTimeout(pushT);try{peer&&peer.destroy()}catch(e){}peer=null;hostConn=null;conns.clear();states.clear();isHost=false;myId=null;peers=[]}
-function scheduleRetry(gen,ms){setTimeout(()=>{if(gen===netGen&&roomCode&&!solo)connectRoom()},ms??(2500+Math.random()*2000))}
-// whoever reaches the room code first hosts it; everyone else connects to the host
+function teardown(){
+  netGen++;clearTimeout(pushT);clearInterval(beatT);
+  const old=clients;clients=[];
+  old.forEach(c=>{try{if(c.connected&&c.__topic)c.publish(c.__topic,'',{retain:true,qos:0});c.end(false)}catch(e){}});
+  states.clear();peers=[];
+}
 function connectRoom(){
-  if(!window.Peer){netStatus('โหลดระบบออนไลน์ไม่ได้ · ตรวจอินเทอร์เน็ต');return}
-  teardown();const gen=netGen;netStatus('กำลังเชื่อมต่อห้อง '+roomCode+'…');
-  const p=new Peer(PREFIX+roomCode,{debug:0});peer=p;
-  p.on('open',id=>{if(gen!==netGen)return;isHost=true;myId=id;states.set(myId,myState());broadcast()});
-  p.on('connection',c=>{if(gen!==netGen)return;
-    c.on('open',()=>{if(gen!==netGen)return;conns.set(c.peer,c);broadcast()});
-    c.on('data',m=>{if(gen===netGen&&m&&m.t==='st'&&m.st){states.set(c.peer,m.st);broadcast()}});
-    c.on('close',()=>{conns.delete(c.peer);states.delete(c.peer);if(gen===netGen)broadcast()});});
-  p.on('error',e=>{if(gen!==netGen)return;
-    if(e.type==='unavailable-id')joinAsGuest(gen);
-    else{netStatus('เชื่อมต่อไม่ได้ ('+e.type+') · กำลังลองใหม่');scheduleRetry(gen)}});
-  p.on('disconnected',()=>{if(gen===netGen&&!p.destroyed){try{p.reconnect()}catch(e){}}});
+  if(!window.mqtt){netStatus('โหลดระบบออนไลน์ไม่ได้ · ตรวจอินเทอร์เน็ต');return}
+  teardown();const gen=netGen;const topic=myTopic();
+  netStatus('กำลังเชื่อมต่อห้อง '+roomCode+'…');
+  clients=BROKERS.map(url=>{
+    let c;try{c=mqtt.connect(url,{clientId:'bt_'+myId+'_'+Math.random().toString(36).slice(2,6),clean:true,connectTimeout:8000,reconnectPeriod:4000,keepalive:30,
+      will:{topic,payload:'',retain:true,qos:0}})}catch(e){return null}
+    c.__topic=topic;
+    c.on('connect',()=>{if(gen!==netGen)return;c.subscribe(TOPIC+roomCode+'/+',{qos:0});publishMine();refresh()});
+    c.on('message',(t,p)=>{if(gen===netGen)onMsg(t,p)});
+    c.on('close',()=>{if(gen===netGen&&!clients.some(x=>x.connected))netStatus('หลุดการเชื่อมต่อ · กำลังต่อใหม่…')});
+    c.on('error',()=>{});
+    return c;
+  }).filter(Boolean);
+  beatT=setInterval(()=>{if(gen===netGen){publishMine();refresh()}},20000);
+  setTimeout(()=>{if(gen===netGen&&!clients.some(c=>c.connected))netStatus('เชื่อมต่อไม่ได้ · ลองเปลี่ยนเน็ต เช่น เน็ตมือถือ แล้วกดเข้าห้องใหม่')},12000);
 }
-function joinAsGuest(gen){
-  try{peer&&peer.destroy()}catch(e){}
-  const p=new Peer({debug:0});peer=p;
-  p.on('open',id=>{if(gen!==netGen)return;myId=id;
-    const c=p.connect(PREFIX+roomCode,{reliable:true});
-    setTimeout(()=>{if(gen===netGen&&!hostConn){netStatus('ต่อกับอีกเครื่องไม่ได้ · เครือข่ายอาจบล็อก · กำลังลองใหม่');scheduleRetry(gen,0)}},15000);
-    c.on('open',()=>{if(gen!==netGen)return;hostConn=c;netStatus(`ห้อง ${roomCode} · เชื่อมต่อแล้ว`,true);try{c.send({t:'st',st:myState()})}catch(e){}});
-    c.on('data',m=>{if(gen===netGen&&m&&m.t==='all')applyList(m.list)});
-    c.on('close',()=>{if(gen!==netGen)return;hostConn=null;peers=[];onRoom();netStatus('หลุดจากห้อง · กำลังต่อใหม่');scheduleRetry(gen,1500)});});
-  p.on('error',e=>{if(gen!==netGen)return;netStatus(e.type==='peer-unavailable'?'ห้องว่าง · กำลังลองใหม่':'เชื่อมต่อไม่ได้ ('+e.type+') · กำลังลองใหม่');scheduleRetry(gen)});
-}
-addEventListener('pagehide',()=>{try{peer&&peer.destroy()}catch(e){}});
+addEventListener('pagehide',()=>{clients.forEach(c=>{try{if(c.connected)c.publish(c.__topic,'',{retain:true,qos:0})}catch(e){}})});
 function onRoom(){
   const players=peers.filter(p=>p.pl===1);
   O=players[0]||null;if(spectate)G=null;
@@ -2989,7 +3006,7 @@ $('bNew').onclick=e=>{const b=e.currentTarget;if(!b.dataset.sure){b.dataset.sure
 
 // ---------- boot ----------
 renderLobby();
-netStatus(window.Peer?'พร้อมเล่นออนไลน์':'โหลดระบบออนไลน์ไม่ได้',!!window.Peer);
+netStatus(window.mqtt?'พร้อมเล่นออนไลน์':'โหลดระบบออนไลน์ไม่ได้',!!window.mqtt);
 })();
 </script>
 
