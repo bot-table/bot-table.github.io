@@ -220,6 +220,38 @@ body.aiming #v-game [data-u]:hover{outline-style:solid;outline-width:3px}
 .ctl button{padding:5px 9px;font-size:13px}
 .log{flex:1 1 auto;min-height:70px;max-height:none}
 @media (max-width:1100px){.game{grid-template-columns:minmax(0,1fr)}.rail{position:static;max-height:none;order:2}}
+/* zones: Construct | Avatar on top, Magic Zone across the bottom, piles on the right */
+.zgrid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,4.2fr) auto;gap:5px;min-width:0}
+.zgrid>.zone{min-width:0}
+.zgrid .slots{flex-wrap:nowrap;overflow:hidden;gap:5px}
+.zgrid .piles{align-self:center}
+/* attached cards */
+.fc>.card{top:calc(var(--ch)/2)}
+.fc.h>.card{top:calc(var(--cw)/2)}
+.fc>.card:not(.attc){z-index:1}
+.fc.hasatt{height:calc(var(--ch) + var(--na)*var(--ch)*.12)}
+.fc.h.hasatt{height:calc(var(--cw) + var(--na)*var(--ch)*.12)}
+.fc>.card.attc{z-index:0;top:calc(var(--ch)/2 + var(--k)*var(--ch)*.12);transform:translate(-50%,-50%);box-shadow:0 1px 4px rgba(0,0,0,.6)}
+.fc.h>.card.attc{top:calc(var(--cw)/2 + var(--k)*var(--ch)*.12);transform:translate(-50%,-50%) rotate(90deg)}
+.fc.hasatt .tagn{bottom:auto;top:calc(var(--ch) - 21px)}
+.fc.h.hasatt .tagn{top:calc(var(--cw) - 21px)}
+.fc .attn{position:absolute;right:2px;bottom:1px;z-index:2;font-family:var(--f-disp);font-size:10px;font-weight:700;background:var(--mat2);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+body.attaching #meSide .zgrid [data-u]{outline:2px dashed var(--gold);outline-offset:2px;cursor:copy}
+/* space savers: labels sit on the zone border, names sit beside the hand, slimmer top bar in a game */
+#v-game .zone{position:relative;padding-top:5px}
+#v-game .zone .zl{position:absolute;top:-6px;left:6px;right:6px;pointer-events:none;font-size:9px;line-height:1;z-index:3}
+#v-game .zone .zl span{background:var(--ink);padding:0 3px;border-radius:3px}
+#v-game .zone .zl span:empty{display:none}
+#v-game .side{padding-top:9px}
+#v-game .board{row-gap:9px}
+.zgrid{row-gap:9px}
+.handrow{display:flex;gap:6px;min-width:0;align-items:stretch}
+.handrow .who{flex-direction:column;align-items:flex-start;justify-content:center;flex:none;gap:3px;max-width:120px}
+.handrow .who .pills{display:flex;flex-wrap:wrap;gap:3px}
+.handrow .hand{flex:1 1 auto;min-width:0}
+body.ingame .bar{padding:0 0 4px;margin-bottom:6px;gap:8px}
+body.ingame .bar button{padding:3px 9px;font-size:13px}
+body.ingame .brand{font-size:15px}
 /* deck code import */
 .importbox textarea{width:100%;font-family:ui-monospace,Consolas,monospace;font-size:13px}
 .impsum{font-size:13px;line-height:1.5}
@@ -2245,7 +2277,7 @@ document.addEventListener('mouseover',e=>{const c=e.target.closest('.card[data-i
 
 // ---------- tabs ----------
 let view='lobby';
-function go(v){view=v;['lobby','deck','game'].forEach(n=>{$('v-'+n).hidden=n!==v;$('tab-'+n).setAttribute('aria-pressed',n===v)});if(v==='deck')renderDB();if(v==='game')render();if(v==='lobby')renderLobby();drawArrows()}
+function go(v){view=v;document.body.classList.toggle('ingame',v==='game');['lobby','deck','game'].forEach(n=>{$('v-'+n).hidden=n!==v;$('tab-'+n).setAttribute('aria-pressed',n===v)});if(v==='deck')renderDB();if(v==='game')render();if(v==='lobby')renderLobby();drawArrows()}
 $('tab-lobby').onclick=()=>go('lobby');$('tab-deck').onclick=()=>go('deck');$('tab-game').onclick=()=>go('game');
 
 // ---------- decks ----------
@@ -2428,11 +2460,16 @@ function act(fn,text){if(!G||spectate)return;fn();pruneArrows();if(text)log(text
 const cn=i=>CARDS[i].name;
 
 // moving cards between places. place = {z:'hand'|'deck'|'A'|'C'|'M'|'H'|'D'|'life'|'land', ix}
-function take(z,ix){
+const FIELD=new Set(['A','C','M']);
+let takenAtt=[];
+// keep=true when a card moves between field zones: its attached cards travel with it;
+// otherwise the attached cards go to Hell
+function take(z,ix,keep){
   if(z==='hand')return G.hand.splice(ix,1)[0];
   if(z==='deck')return G.deck.splice(ix,1)[0];
   if(z==='H'||z==='D')return G[z].splice(ix,1)[0];
-  if(z==='A'||z==='C'||z==='M')return G[z].splice(ix,1)[0].i;
+  if(FIELD.has(z)){const e=G[z].splice(ix,1)[0];const att=e.att||[];takenAtt=keep?att:[];
+    if(!keep&&att.length){G.H.push(...att);log(`การ์ดที่แนบใต้ ${cn(e.i)} ${att.length} ใบ → นรก`)}return e.i}
   if(z==='life')return G.life.splice(ix,1)[0].i;
   if(z==='land'){const i=G.land.i;G.land=null;return i}
   if(z==='reveal')return null;
@@ -2451,7 +2488,26 @@ function put(i,to){
 function move(z,ix,to,verb){
   const i=(z==='A'||z==='C'||z==='M')?G[z][ix].i:z==='hand'?G.hand[ix]:z==='life'?G.life[ix].i:z==='land'?G.land.i:G[z][ix];
   const secret=(z==='hand'||z==='deck')&&(to==='deckTop'||to==='deckBottom'||to==='hand');
-  act(()=>{take(z,ix);put(i,to)},verb||(secret?`ย้ายการ์ด 1 ใบไป${ZN[to]}`:`${cn(i)} → ${ZN[to]}`));
+  const keep=FIELD.has(z)&&FIELD.has(to);
+  act(()=>{take(z,ix,keep);put(i,to);if(keep&&takenAtt.length)G[to][G[to].length-1].att=takenAtt},verb||(secret?`ย้ายการ์ด 1 ใบไป${ZN[to]}`:`${cn(i)} → ${ZN[to]}`));
+}
+// ---------- attaching: a card tucked under a main card on the field ----------
+let attaching=null;
+function startAttach(src,name){endAim();attaching={...src,name};document.body.classList.add('attaching');$('aimHint').textContent=`เลือกการ์ดบนสนามของคุณที่จะให้ ${name} ไปอยู่ใต้ · Esc ยกเลิก`}
+function endAttach(){if(!attaching)return;attaching=null;document.body.classList.remove('attaching');$('aimHint').textContent=''}
+function attachTo(a,target){
+  const srcI=a.z==='hand'?G.hand[a.ix]:G[a.z][a.ix].i;
+  act(()=>{let carried=[];
+    if(a.z==='hand')G.hand.splice(a.ix,1);else{const e=G[a.z].splice(a.ix,1)[0];carried=e.att||[]}
+    target.att=[...(target.att||[]),srcI,...carried];G.reveal=G.reveal.filter(x=>x!==srcI||G.hand.includes(srcI));
+  },`${cn(srcI)} แนบใต้ ${cn(target.i)}`);
+}
+function attMenu(e){
+  const show=()=>openModal(`การ์ดที่แนบใต้ ${cn(e.i)}`,(e.att||[]).slice(),(k,cel)=>openMenu(cel,cn(e.att[k]),[
+    ['แยกออกไป Magic Zone',()=>detach(e,k,'M')],['แยกออกไป Avatar Zone',()=>detach(e,k,'A')],['ขึ้นมือ',()=>detach(e,k,'hand')],
+    ['ลงนรก',()=>detach(e,k,'H')],['เนรเทศ → มิติมืด',()=>detach(e,k,'D')]]));
+  const detach=(e,k,to)=>{const i=e.att[k];act(()=>{e.att.splice(k,1);put(i,to)},`${cn(i)} (ที่แนบ) → ${ZN[to]}`);if(e.att.length)show();else closeModal()};
+  show();
 }
 function draw(n=1){act(()=>{for(let k=0;k<n&&G.deck.length;k++)G.hand.push(G.deck.shift())},`จั่ว ${n} ใบ`)}
 
@@ -2462,7 +2518,7 @@ let peers=[];
 function netStatus(t,on){const p=$('netpill');p.textContent=t;p.className='pill'+(on?' on':'')}
 function publicState(){
   if(!G||spectate)return {g:roomCode,nm:nick(),pl:0};
-  const fe=e=>[e.f?-1:e.i,e.s?1:0,e.f?1:0,e.m||0,e.u,e.x?1:0,(e.n||'').slice(0,24)];
+  const fe=e=>[e.f?-1:e.i,e.s?1:0,e.f?1:0,e.m||0,e.u,e.x?1:0,(e.n||'').slice(0,24),(e.att||[]).slice(0,6)];
   const st={g:roomCode,nm:nick(),pl:1,pid:G.pid,tn:G.turn,dk:G.deck.length,hd:G.hand.length,hits:G.hits,
     lf:G.life.map(e=>[e.up?e.i:-1,e.u]),A:G.A.map(fe),C:G.C.map(fe),M:G.M.map(fe),H:G.H.slice(),D:G.D.slice(),
     ld:G.land?[G.land.i,G.landTs,G.land.u,G.land.x?1:0,(G.land.n||'').slice(0,24)]:null,rv:G.reveal.slice(0,8),ar:G.arrows.slice(-6),lg:G.log.slice(-6).map(e=>[e.t,e.x.slice(0,70)])};
@@ -2473,9 +2529,9 @@ function publicState(){
 }
 const K=i=>(i==null||i<0)?-1:key(CARDS[i]);
 const I=k=>typeof k==='string'?(BYKEY.has(k)?BYKEY.get(k).i:-1):(k==null?-1:k);
-function encodeState(st){if(!st.pl)return st;const e=a=>[K(a[0]),...a.slice(1)];
+function encodeState(st){if(!st.pl)return st;const e=a=>{const r=[K(a[0]),...a.slice(1)];if(Array.isArray(r[7]))r[7]=r[7].map(K);return r};
   return {...st,lf:st.lf.map(e),A:st.A.map(e),C:st.C.map(e),M:st.M.map(e),H:st.H.map(K),D:st.D.map(K),ld:st.ld?[K(st.ld[0]),...st.ld.slice(1)]:null,rv:st.rv.map(K)}}
-function decodeState(st){if(!st||!st.pl)return st||{};const d=a=>Array.isArray(a)?[I(a[0]),...a.slice(1)]:a;const ok=i=>i>=0;
+function decodeState(st){if(!st||!st.pl)return st||{};const d=a=>{if(!Array.isArray(a))return a;const r=[I(a[0]),...a.slice(1)];if(Array.isArray(r[7]))r[7]=r[7].map(I).filter(x=>x>=0);return r};const ok=i=>i>=0;
   const ld=st.ld&&I(st.ld[0])>=0?[I(st.ld[0]),...st.ld.slice(1)]:null;
   return {...st,lf:(st.lf||[]).map(d),A:(st.A||[]).map(d),C:(st.C||[]).map(d),M:(st.M||[]).map(d),H:(st.H||[]).map(I).filter(ok),D:(st.D||[]).map(I).filter(ok),ld,rv:(st.rv||[]).map(I).filter(ok),ar:st.ar||[]}}
 const myState=()=>encodeState(publicState());
@@ -2561,7 +2617,7 @@ $('bLeave').onclick=()=>{teardown();netStatus('ออฟไลน์',false);roo
 let menuEl=null;
 function closeMenu(){if(menuEl){menuEl.remove();menuEl=null}}
 document.addEventListener('pointerdown',e=>{if(menuEl&&!menuEl.contains(e.target))closeMenu()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeMenu();closeModal();endAim()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeMenu();closeModal();endAim();endAttach()}});
 function openMenu(anchor,title,items,extra){
   closeMenu();const m=document.createElement('div');m.className='menu';m.setAttribute('role','menu');
   if(title){const h=document.createElement('div');h.className='mh';h.textContent=title;m.appendChild(h)}
@@ -2598,6 +2654,14 @@ let aiming=null;
 function startAim(u,name){aiming={u,name};document.body.classList.add('aiming');$('aimHint').textContent=`เลือกเป้าหมายของ ${name} · Esc ยกเลิก`}
 function endAim(){if(!aiming)return;aiming=null;document.body.classList.remove('aiming');$('aimHint').textContent=''}
 document.addEventListener('click',e=>{
+  if(attaching){
+    e.preventDefault();e.stopPropagation();
+    const t=e.target.closest('#meSide [data-u]');const a=attaching;endAttach();if(!t)return;
+    let target=null;for(const z of FIELD){const f=G[z].find(x=>x.u===t.dataset.u);if(f){target=f;break}}
+    if(!target){toast('เลือกการ์ดบนสนามของคุณ (Avatar, Construct หรือ Magic)');return}
+    if(a.z!=='hand'&&G[a.z][a.ix]===target)return;
+    attachTo(a,target);return;
+  }
   if(!aiming)return;e.preventDefault();e.stopPropagation();
   const t=e.target.closest('#v-game [data-u]');const a=aiming;endAim();
   if(!t||t.dataset.u===a.u)return;const to=t.dataset.u;
@@ -2665,7 +2729,8 @@ function handMenu(ix,el){
   items.push([G.reveal.includes(i)?'เลิกเปิดให้ดู':'เปิดให้อีกฝ่ายดู',()=>act(()=>{G.reveal=G.reveal.includes(i)?G.reveal.filter(x=>x!==i):[...G.reveal,i]},G.reveal.includes(i)?null:`เปิดให้ดู: ${c.name}`)]);
   items.push('-');
   items.push(...toZoneItems('hand',ix,['ขึ้นมือ','อัญเชิญ → Avatar Zone','สร้าง → Construct Zone','ลง Land Magic']).filter(it=>!(c.t==='M'&&it[0]==='ลง Magic Zone')));
-  items.push(['ลงคว่ำใน Avatar Zone',()=>act(()=>{take('hand',ix);G.A.push({i,s:0,f:1,m:0})},'ลงการ์ดคว่ำ 1 ใบใน Avatar Zone')]);
+  items.push(['ลงคว่ำใน Avatar Zone',()=>act(()=>{take('hand',ix);G.A.push({i,s:0,f:1,m:0,u:rid()})},'ลงการ์ดคว่ำ 1 ใบใน Avatar Zone')]);
+  if(G.A.length+G.C.length+G.M.length)items.push(['แนบใต้การ์ดบนสนาม…',()=>startAttach({z:'hand',ix},c.name)]);
   openMenu(el,c.name,items);
 }
 function fieldMenu(z,ix,el){
@@ -2677,6 +2742,8 @@ function fieldMenu(z,ix,el){
   ];
   if(e.m)items.push(['ล้างค่า POWER',()=>act(()=>{e.m=0},`${c.name} ล้าง POWER`)]);
   items.push('-',...statusItems(e,c.name,el),'-');
+  if(e.att&&e.att.length)items.push([`การ์ดที่แนบอยู่ (${e.att.length})…`,()=>attMenu(e)]);
+  if(G.A.length+G.C.length+G.M.length>1)items.push(['แนบใบนี้ใต้การ์ดอื่น…',()=>startAttach({z,ix},c.name)]);
   items.push([e.f?'หงายการ์ด':'คว่ำการ์ด',()=>act(()=>{e.f=e.f?0:1},e.f?`หงาย ${c.name}`:`คว่ำการ์ด 1 ใบ`)]);
   items.push('-');
   items.push(['ทำลาย → นรก',()=>move(z,ix,'H',`${c.name} ถูกทำลาย → นรก`)]);
@@ -2748,7 +2815,7 @@ function pileEl(label,count,topIdx,onClick,drop,isDeck){
   if(drop)makeDrop(z,drop);
   return z;
 }
-function fieldCard(i,{h=false,rest=false,back=false,mine=false,mod=0,x=0,n='',u=null,label=''}={}){
+function fieldCard(i,{h=false,rest=false,back=false,mine=false,mod=0,x=0,n='',u=null,label='',att=[]}={}){
   const hidden=back||i==null;
   const w=document.createElement('div');w.className='fc'+(h||rest?' h':'')+(mine?' mine':'')+(x?' used':'');
   w.appendChild(hidden?cardEl(null,{back:true}):cardEl(i));
@@ -2756,6 +2823,13 @@ function fieldCard(i,{h=false,rest=false,back=false,mine=false,mod=0,x=0,n='',u=
   if(mod){const s=document.createElement('span');s.className='mod'+(mod<0?' neg':'');s.textContent=(mod>0?'+':'')+mod;w.appendChild(s)}
   if(x){const s=document.createElement('span');s.className='tagu';s.textContent='✓ ใช้แล้ว';w.appendChild(s)}
   if(n){const s=document.createElement('span');s.className='tagn';s.textContent=n;s.title=n;w.appendChild(s)}
+  // attached cards sit under the main card, each peeking out a little lower
+  const shown=(att||[]).filter(a=>a!=null&&a>=0).slice(0,4);
+  if(shown.length){
+    w.classList.add('hasatt');w.style.setProperty('--na',shown.length);
+    shown.forEach((ai,k)=>{const a=cardEl(ai);a.classList.add('attc');a.style.setProperty('--k',k+1);w.insertBefore(a,w.firstChild)});
+    if((att||[]).length>1){const s=document.createElement('span');s.className='attn';s.textContent='แนบ '+att.length;w.appendChild(s)}
+  }
   if(mine)w.tabIndex=0;else if(!hidden)w.addEventListener('click',()=>showPreview(i));
   return w;
 }
@@ -2775,7 +2849,7 @@ function renderSide(st,mine,host,label){
   const hand=pub?st.hd:st.hand.length, deckN=pub?st.dk:st.deck.length;
   const pid=st.pid||'x';
   const lifeArr=pub?st.lf.map(x=>Array.isArray(x)?{i:x[0]>=0?x[0]:null,up:x[0]>=0,u:x[1]}:{i:x>=0?x:null,up:x>=0}):st.life;
-  who.innerHTML=`<span class="dot"></span><span>${esc(label)}</span><span class="pill">เทิร์น ${pub?st.tn:st.turn}</span><span class="pill">มือ ${hand}</span><span class="pill">เด็ค ${deckN}</span>`;
+  who.innerHTML=`<span><span class="dot"></span> ${esc(label)}</span><span class="pills"><span class="pill">เทิร์น ${pub?st.tn:st.turn}</span><span class="pill">มือ ${hand}</span><span class="pill">เด็ค ${deckN}</span></span>`;
   // life zone: one column of sideways cards
   const up=lifeArr.filter(x=>x.up).length;
   const life=zone('Life',`${lifeArr.length-up}/${lifeArr.length}`);life.classList.add('lifez');
@@ -2783,8 +2857,8 @@ function renderSide(st,mine,host,label){
   const ls_=life.querySelector('.slots');
   lifeArr.forEach((e,ix)=>{const c=fieldCard(e.up?e.i:null,{h:true,back:!e.up,mine,u:e.u,label:e.up?cn(e.i):'Life คว่ำของ '+label});if(mine)c.onclick=ev=>{ev.stopPropagation();lifeMenu(ix,c)};ls_.appendChild(c)});
   if(lifeArr.length&&up>=lifeArr.length){const m=document.createElement('div');m.className='lostmsg';m.style.fontSize='12px';m.style.textAlign='center';m.style.maxWidth='var(--ch)';m.textContent=mine?'Life หมด · โดนอีกครั้ง = แพ้':'Life หมด';ls_.appendChild(m)}
-  const ent=e=>pub?{i:e[0]<0?null:e[0],s:e[1],f:e[2],m:e[3],u:e[4],x:e[5],n:e[6]}:e;
-  const fcOf=e=>fieldCard(e.i,{back:!!(e.f||e.i==null),rest:!!e.s,mine,mod:e.m,x:e.x,n:e.n,u:e.u});
+  const ent=e=>pub?{i:e[0]<0?null:e[0],s:e[1],f:e[2],m:e[3],u:e[4],x:e[5],n:e[6],att:(e[7]||[]).filter(a=>a>=0)}:e;
+  const fcOf=e=>fieldCard(e.i,{back:!!(e.f||e.i==null),rest:!!e.s,mine,mod:e.m,x:e.x,n:e.n,u:e.u,att:e.att});
   // avatar zone
   const A=st.A.map(ent);
   const av=zone('Avatar Zone',`${A.length}/6`);av.classList.add('z-av');const as=av.querySelector('.slots');
@@ -2809,7 +2883,12 @@ function renderSide(st,mine,host,label){
   );
   if(mine){makeDrop(av,'A');makeDrop(co,'C');makeDrop(mg,'M')}
   co.classList.add('z-co');
-  const r1=document.createElement('div');r1.className='zrow1';r1.append(av,co,mg,piles);
+  // Construct | Avatar on one row, Magic Zone under both, piles on the right.
+  // The opponent's side is flipped top-to-bottom so both Avatar rows face the middle.
+  const r1=document.createElement('div');r1.className='zgrid';
+  const place=(el,c,r)=>{el.style.gridColumn=c;el.style.gridRow=r};
+  place(co,'1',mine?'1':'2');place(av,'2',mine?'1':'2');place(mg,'1 / 3',mine?'2':'1');place(piles,'3','1 / 3');
+  r1.append(co,av,mg,piles);
   // hand
   const hd=document.createElement('div');hd.className='hand'+(mine?'':' op');
   hd.dataset.u='hand-'+pid;hd.dataset.label='มือของ '+label;
@@ -2819,9 +2898,10 @@ function renderSide(st,mine,host,label){
   // grid: Life column beside the zone row and the hand (left for you, right for the opponent)
   const board=document.createElement('div');board.className='board'+(mine?'':' op');
   const at=(el,col,row)=>{el.style.gridColumn=col;el.style.gridRow=row;return el};
-  if(mine)board.append(at(life,'1','1 / 3'),at(r1,'2','1'),at(hd,'2','2'));
-  else board.append(at(hd,'1','1'),at(r1,'1','2'),at(life,'2','1 / 3'));
-  side.append(who,board);
+  const hr=document.createElement('div');hr.className='handrow';hr.append(who,hd);
+  if(mine)board.append(at(life,'1','1 / 3'),at(r1,'2','1'),at(hr,'2','2'));
+  else board.append(at(hr,'1','1'),at(r1,'1','2'),at(life,'2','1 / 3'));
+  side.append(board);
   host.appendChild(side);
 }
 function render(){
@@ -2860,7 +2940,7 @@ function fitLine(el,vertical){
   live.slice(1).forEach(k=>{if(vertical)k.style.marginTop=-step+'px';else k.style.marginLeft=-step+'px'});
 }
 function fitAll(){
-  document.querySelectorAll('#v-game .zrow1 .slots, #v-game .hand').forEach(el=>fitLine(el,false));
+  document.querySelectorAll('#v-game .zgrid .slots, #v-game .hand').forEach(el=>fitLine(el,false));
   document.querySelectorAll('#v-game .lifez .slots').forEach(el=>fitLine(el,true));
 }
 // Pick a card size that lets the opponent's side, Land Magic and your side all fit the window.
@@ -2874,13 +2954,14 @@ function sizeBoard(){
   // the board decides the card size; the side panel just fits whatever height is left
   const bottomPad=parseFloat(getComputedStyle(document.documentElement).paddingBottom)||0;
   const overBy=()=>col.getBoundingClientRect().bottom+scrollY+10+bottomPad-innerHeight;
-  let cw=Math.max(34,Math.min(112,(innerHeight-240)/4.3/1.36,W/16.5));set(cw);
+  const UH=6.3, UW=12.5; // board height and width measured in card heights / card widths
+  let cw=Math.max(34,Math.min(112,(innerHeight-260)/UH/1.36,W/UW));set(cw);
   for(let k=0;k<8;k++){
     const over=overBy();if(over<=0||cw<=34)break;
-    cw=Math.max(34,cw-over/4.3/1.36-1);set(cw);
+    cw=Math.max(34,cw-over/UH/1.36-1);set(cw);
   }
   // grow back if there is spare room
-  for(let k=0;k<4;k++){const spare=-overBy();if(spare<8||cw>=112||cw>=W/16.5)break;const n=Math.min(112,W/16.5,cw+spare/4.3/1.36);set(n);if(overBy()>0){set(cw);break}cw=n}
+  for(let k=0;k<4;k++){const spare=-overBy();if(spare<8||cw>=112||cw>=W/UW)break;const n=Math.min(112,W/UW,cw+spare/UH/1.36);set(n);if(overBy()>0){set(cw);break}cw=n}
   rail.style.maxHeight=Math.max(260,innerHeight-rail.getBoundingClientRect().top-10-bottomPad)+'px';
   fitAll();drawArrows();
 }
