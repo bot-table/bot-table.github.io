@@ -2516,7 +2516,8 @@ function draw(n=1){act(()=>{for(let k=0;k<n&&G.deck.length;k++)G.hand.push(G.dec
 // so someone joining later sees it at once) and listens to everyone in it. Three servers are used at once,
 // so the room keeps working if one of them is down or blocked.
 const BROKERS=(()=>{const q=new URLSearchParams(location.search).get('broker');
-  return q?[q]:['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt','wss://test.mosquitto.org:8081/mqtt']})();
+  return q?q.split(','):['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt','wss://test.mosquitto.org:8081/mqtt','wss://mqtt.eclipseprojects.io:443/mqtt']})();
+const APP_VER='v7';
 const TOPIC='bottcg-tl/v2/';
 let clients=[],states=new Map(),netGen=0,pushT=null,beatT=null;
 let peers=[];
@@ -2548,23 +2549,28 @@ function publishMine(){
   clients.forEach(c=>{if(c.connected){try{c.publish(myTopic(),msg,{retain:true,qos:0})}catch(e){}}});
 }
 function pushPresence(){if(!roomCode||solo)return;clearTimeout(pushT);pushT=setTimeout(publishMine,80)}
-function onMsg(topic,buf){
+let lastHello=0;
+function onMsg(topic,buf,packet){
   const id=topic.split('/').pop();if(id===myId)return;
   const s=buf&&buf.length?String(buf):'';
+  if(id==='_hello'){                              // someone just joined: answer with a fresh update
+    if(s&&s!==myId&&Date.now()-lastHello>800){lastHello=Date.now();publishMine()}return}
   if(!s){if(states.delete(id))refresh();return}
   let m;try{m=JSON.parse(s)}catch(e){return}
   if(!m||!m.st||typeof m.t!=='number')return;
-  if(Date.now()-m.t>10*60*1000)return;            // left over from an old session
+  const live=!(packet&&packet.retain);            // stored copies may be left over from a closed tab
   const cur=states.get(id);
-  if(cur&&cur.t>=m.t){cur.r=Date.now();return}   // same update arriving from another server
-  states.set(id,{t:m.t,r:Date.now(),st:m.st});refresh();
+  if(cur&&cur.t>=m.t){cur.r=Date.now();if(live&&!cur.live){cur.live=true;refresh()}return}
+  states.set(id,{t:m.t,r:Date.now(),st:m.st,live:live||!!(cur&&cur.live)});refresh();
 }
+function brokerCount(){return clients.filter(c=>c.connected).length}
 function refresh(){
   const now=Date.now();
   for(const[id,v]of states)if(now-v.r>70000)states.delete(id);   // no heartbeat for 70 s: gone
-  const list=[...states].map(([id,v])=>({id,st:v.st}));
+  const list=[...states].filter(([id,v])=>v.live).map(([id,v])=>({id,st:v.st}));
   const n=list.filter(x=>x.st&&x.st.g===roomCode).length;
-  if(clients.some(c=>c.connected))netStatus(n?`ห้อง ${roomCode} · ออนไลน์ ${n+1} คน`:`ห้อง ${roomCode} · รออีกฝ่าย`,true);
+  const up=brokerCount();
+  if(up)netStatus((n?`ห้อง ${roomCode} · ออนไลน์ ${n+1} คน`:`ห้อง ${roomCode} · รออีกฝ่าย`)+` · เซิร์ฟเวอร์ ${up}/${clients.length}`,true);
   applyList(list);
 }
 function applyList(list){peers=(list||[]).filter(x=>x&&x.id!==myId&&x.st&&x.st.g===roomCode).map(x=>({peer:x.id,...decodeState(x.st)}));onRoom()}
@@ -2582,8 +2588,10 @@ function connectRoom(){
     let c;try{c=mqtt.connect(url,{clientId:'bt_'+myId+'_'+Math.random().toString(36).slice(2,6),clean:true,connectTimeout:8000,reconnectPeriod:4000,keepalive:30,
       will:{topic,payload:'',retain:true,qos:0}})}catch(e){return null}
     c.__topic=topic;
-    c.on('connect',()=>{if(gen!==netGen)return;c.subscribe(TOPIC+roomCode+'/+',{qos:0});publishMine();refresh()});
-    c.on('message',(t,p)=>{if(gen===netGen)onMsg(t,p)});
+    c.on('connect',()=>{if(gen!==netGen)return;
+      c.subscribe(TOPIC+roomCode+'/+',{qos:0},()=>{try{c.publish(TOPIC+roomCode+'/_hello',myId,{qos:0,retain:false})}catch(e){}});
+      publishMine();refresh()});
+    c.on('message',(t,p,pk)=>{if(gen===netGen)onMsg(t,p,pk)});
     c.on('close',()=>{if(gen===netGen&&!clients.some(x=>x.connected))netStatus('หลุดการเชื่อมต่อ · กำลังต่อใหม่…')});
     c.on('error',()=>{});
     return c;
@@ -3006,7 +3014,7 @@ $('bNew').onclick=e=>{const b=e.currentTarget;if(!b.dataset.sure){b.dataset.sure
 
 // ---------- boot ----------
 renderLobby();
-netStatus(window.mqtt?'พร้อมเล่นออนไลน์':'โหลดระบบออนไลน์ไม่ได้',!!window.mqtt);
+netStatus(window.mqtt?'พร้อมเล่นออนไลน์':'โหลดระบบออนไลน์ไม่ได้',!!window.mqtt);{const v=document.createElement('span');v.className='pill';v.textContent=APP_VER;$('netpill').after(v)}
 })();
 </script>
 
