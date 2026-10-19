@@ -145,6 +145,13 @@ body.aiming #v-game [data-u]:hover{outline-style:solid;outline-width:3px}
 .log .e{display:flex;gap:6px}
 .log .e i{font-style:normal;flex:none}
 .log .e.me i{color:var(--gold)} .log .e.op i{color:var(--red)}
+.log .e.chat{background:var(--mat2);border-radius:7px;padding:3px 7px;margin:1px 0}
+.log .e.chat.me{border-left:3px solid var(--gold)} .log .e.chat.op{border-left:3px solid var(--red)}
+.log .e.chat b{font-family:var(--f-disp);margin-right:4px}
+.log .e.chat span{overflow-wrap:anywhere}
+.chatbar{display:flex;gap:5px;flex:none}
+.chatbar input{flex:1 1 auto;min-width:0}
+.chatbar button{padding:5px 11px}
 
 /* popover menu */
 .menu{position:fixed;z-index:50;background:var(--mat2);border:1px solid var(--line);border-radius:10px;padding:6px;display:flex;flex-direction:column;gap:3px;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,.5);max-height:80vh;overflow:auto}
@@ -369,8 +376,9 @@ body.ingame .brand{font-size:15px}
           <button id="bNew" class="ghost">เริ่มเกมใหม่</button>
           <button id="bLeave" class="ghost">ออกจากห้อง</button>
         </div>
-        <div class="lbl">บันทึกการเล่น</div>
+        <div class="lbl">บันทึกการเล่น & แชท</div>
         <div class="log" id="log"></div>
+        <form id="chatForm" class="chatbar" autocomplete="off"><input id="chatIn" maxlength="200" placeholder="พิมพ์แชท แล้วกด Enter"><button class="pri" type="submit">ส่ง</button></form>
       </aside>
     </div>
   </section>
@@ -2517,7 +2525,7 @@ function draw(n=1){act(()=>{for(let k=0;k<n&&G.deck.length;k++)G.hand.push(G.dec
 // so the room keeps working if one of them is down or blocked.
 const BROKERS=(()=>{const q=new URLSearchParams(location.search).get('broker');
   return q?q.split(','):['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt','wss://test.mosquitto.org:8081/mqtt','wss://mqtt.eclipseprojects.io:443/mqtt']})();
-const APP_VER='v7';
+const APP_VER='v8';
 const TOPIC='bottcg-tl/v2/';
 let clients=[],states=new Map(),netGen=0,pushT=null,beatT=null;
 let peers=[];
@@ -2555,6 +2563,7 @@ function onMsg(topic,buf,packet){
   const s=buf&&buf.length?String(buf):'';
   if(id==='_hello'){                              // someone just joined: answer with a fresh update
     if(s&&s!==myId&&Date.now()-lastHello>800){lastHello=Date.now();publishMine()}return}
+  if(id==='_chat'){if(s){try{receiveChat(JSON.parse(s))}catch(e){}}return}
   if(!s){if(states.delete(id))refresh();return}
   let m;try{m=JSON.parse(s)}catch(e){return}
   if(!m||!m.st||typeof m.t!=='number')return;
@@ -2564,6 +2573,7 @@ function onMsg(topic,buf,packet){
   states.set(id,{t:m.t,r:Date.now(),st:m.st,live:live||!!(cur&&cur.live)});refresh();
 }
 function brokerCount(){return clients.filter(c=>c.connected).length}
+function sendChatNet(m){const msg=JSON.stringify(m);clients.forEach(c=>{if(c.connected){try{c.publish(TOPIC+roomCode+'/_chat',msg,{qos:0,retain:false})}catch(e){}}})}
 function refresh(){
   const now=Date.now();
   for(const[id,v]of states)if(now-v.r>70000)states.delete(id);   // no heartbeat for 70 s: gone
@@ -2623,6 +2633,7 @@ function renderLobby(){
 $('regen').onclick=()=>{pendingCode=genCode();renderLobby()};
 $('nick').value=ls.get('bot.nick','');$('nick').oninput=()=>{ls.set('bot.nick',$('nick').value);pushPresence()};
 function enter(code,{watch=false,isSolo=false}={}){
+  if(roomCode!==code){chatLog=[];chatSeen.clear()}
   roomCode=code;spectate=watch;solo=isSolo;oppLog.clear();O=null;
   if(!watch){
     const saved=ls.get('bot.game.'+code,null);
@@ -2992,12 +3003,35 @@ function sizeBoard(){
 }
 addEventListener('resize',sizeBoard);
 const dropped=new WeakSet();function makeDropOnce(el,to){if(dropped.has(el))return;dropped.add(el);makeDrop(el,to)}
+// ---------- chat ----------
+// Messages go out through the same online connection as the table (sendChatNet); each one carries a
+// unique key so a message arriving twice (several relay servers) shows once.
+const chatSelf=rid()+rid();
+const chatSeen=new Set();let chatLog=[];
+function receiveChat(m){
+  if(!m||typeof m.k!=='string'||chatSeen.has(m.k)||m.g!==roomCode)return;chatSeen.add(m.k);
+  const mine=m.id===chatSelf;
+  chatLog.push({t:Date.now(),nm:String(m.nm||'').slice(0,20)||'ผู้เล่น',tx:String(m.tx||'').slice(0,200),me:mine});
+  if(chatLog.length>120)chatLog.shift();
+  if(view==='game')renderLog();
+  if(!mine)toast(`${String(m.nm||'อีกฝ่าย').slice(0,20)}: ${String(m.tx||'').slice(0,80)}`);
+}
+$('chatForm').addEventListener('submit',e=>{
+  e.preventDefault();const tx=$('chatIn').value.trim();if(!tx)return;
+  if(!roomCode){toast('เข้าห้องก่อนจึงจะแชทได้');return}
+  const m={g:roomCode,id:chatSelf,nm:nick(),tx:tx.slice(0,200),k:chatSelf+'-'+Date.now()+'-'+rid()};
+  $('chatIn').value='';receiveChat(m);if(!solo)sendChatNet(m);
+});
 function renderLog(){
   const items=[];if(G&&!spectate)G.log.forEach(e=>items.push({t:e.t,x:e.x,me:true}));
   oppLog.forEach(e=>items.push({t:e.t,x:e.x,me:false,who:e.who}));
+  chatLog.forEach(c=>items.push({t:c.t,chat:true,me:c.me,who:c.nm,x:c.tx}));
   items.sort((a,b)=>a.t-b.t);
   const box=$('log');const atBottom=box.scrollHeight-box.scrollTop-box.clientHeight<30;
-  box.replaceChildren(...items.slice(-80).map(e=>{const d=document.createElement('div');d.className='e '+(e.me?'me':'op');const w=document.createElement('i');w.textContent=e.me?'●':'●';const t=document.createElement('span');t.textContent=(e.me?'':((e.who||'คู่แข่ง')+': '))+e.x;d.append(w,t);return d}));
+  box.replaceChildren(...items.slice(-100).map(e=>{
+    const d=document.createElement('div');d.className='e '+(e.me?'me':'op')+(e.chat?' chat':'');
+    if(e.chat){const n=document.createElement('b');n.textContent=e.who+':';const t=document.createElement('span');t.textContent=e.x;d.append(n,t);return d}
+    const w=document.createElement('i');w.textContent='●';const t=document.createElement('span');t.textContent=(e.me?'':((e.who||'คู่แข่ง')+': '))+e.x;d.append(w,t);return d}));
   if(atBottom)box.scrollTop=box.scrollHeight;
 }
 
