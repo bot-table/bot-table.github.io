@@ -227,8 +227,16 @@ body.aiming #v-game [data-u]:hover{outline-style:solid;outline-width:3px}
 .ctl button{padding:5px 9px;font-size:13px}
 .log{flex:1 1 auto;min-height:70px;max-height:none}
 @media (max-width:1100px){.game{grid-template-columns:minmax(0,1fr)}.rail{position:static;max-height:none;order:2}}
-/* zones: Construct | Avatar on top, Magic Zone across the bottom, piles on the right */
-.zgrid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,4.2fr) auto;gap:5px;min-width:0}
+/* zones: Construct | Avatar | Scout on top, Magic Zone across the bottom, piles on the right */
+.zgrid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,4.2fr) minmax(0,1.6fr) auto;gap:5px;min-width:0}
+.z-sc{background:rgba(111,191,138,.06)}
+#v-game .z-sc .zl span:first-child{color:var(--good)}
+/* Hell: cards that arrived this turn */
+.pile.hashnew .slots{position:relative}
+.hnew{position:absolute;right:-4px;top:-4px;z-index:3;background:var(--gold);color:#1a1408;font-family:var(--f-disp);font-weight:700;font-size:11px;border-radius:99px;padding:1px 6px}
+.card.newhell{outline:3px solid var(--gold);outline-offset:2px}
+.card .hnum{position:absolute;left:4px;top:4px;z-index:2;min-width:22px;height:22px;display:grid;place-items:center;background:var(--gold);color:#1a1408;font-family:var(--f-disp);font-weight:700;font-size:13px;border-radius:99px;box-shadow:0 1px 4px rgba(0,0,0,.6)}
+.pile .card[draggable=true]{cursor:grab}
 .zgrid>.zone{min-width:0}
 .zgrid .slots{flex-wrap:nowrap;overflow:hidden;gap:5px}
 .zgrid .piles{align-self:center}
@@ -2456,14 +2464,20 @@ function newGame(deck,startN){
   for(const[k,q]of Object.entries(deck.main)){const c=BYKEY.get(k);if(c)for(let n=0;n<q;n++)main.push(c.i)}
   for(const[k,q]of Object.entries(deck.life)){const c=BYKEY.get(k);if(c)for(let n=0;n<q;n++)life.push(c.i)}
   shuffle(main);shuffle(life);
-  return {v:2,pid:rid(),deckName:deck.name,deck:main,hand:main.splice(0,startN),life:life.map(i=>({i,up:0,u:rid()})),hits:0,A:[],C:[],M:[],H:[],D:[],land:null,landTs:0,turn:1,log:[],reveal:[],arrows:[]};
+  return {v:2,pid:rid(),deckName:deck.name,deck:main,hand:main.splice(0,startN),life:life.map(i=>({i,up:0,u:rid()})),hits:0,A:[],C:[],M:[],H:[],Hn:[],D:[],S:[],land:null,landTs:0,turn:1,log:[],reveal:[],arrows:[]};
 }
 function rid(){return Math.random().toString(36).slice(2,8)}
-function migrate(g){g.pid=g.pid||rid();g.arrows=g.arrows||[];['A','C','M'].forEach(z=>g[z].forEach(e=>{e.u=e.u||rid()}));g.life.forEach(e=>{e.u=e.u||rid()});if(g.land)g.land.u=g.land.u||rid();g.v=2;return g}
+function migrate(g){g.pid=g.pid||rid();g.arrows=g.arrows||[];g.S=g.S||[];g.Hn=(g.Hn&&g.Hn.length===g.H.length)?g.Hn:g.H.map(()=>0);
+  ['A','C','M','S'].forEach(z=>g[z].forEach(e=>{e.u=e.u||rid()}));g.life.forEach(e=>{e.u=e.u||rid()});if(g.land)g.land.u=g.land.u||rid();g.v=2;return g}
+// "this turn" for the Hell markers: goes up whenever either player ends a turn, and both players compute the same number
+function turnEpoch(){return (G?G.turn:0)+(O&&O.tn?O.tn:0)}
+function toHell(...cards){for(const i of cards){if(i==null)continue;G.H.push(i);G.Hn.push(turnEpoch())}}
+// numbers 1, 2, 3… for the Hell cards that arrived this turn, in the order they arrived
+function hellOrder(Hn,ep){let c=0;return (Hn||[]).map(v=>v===ep?++c:0)}
 function saveG(){if(G&&roomCode)ls.set('bot.game.'+roomCode,G)}
 const nick=()=>($('nick').value.trim()||'ผู้เล่น').slice(0,20);
 function log(t){if(!G)return;G.log.push({t:Date.now(),x:t});if(G.log.length>60)G.log.shift()}
-function pruneArrows(){if(!G||!G.arrows)return;const live=new Set([...G.A,...G.C,...G.M,...G.life].map(e=>e.u));if(G.land)live.add(G.land.u);G.arrows=G.arrows.filter(a=>live.has(a[0]))}
+function pruneArrows(){if(!G||!G.arrows)return;const live=new Set([...G.A,...G.C,...G.M,...G.life,...(G.S||[])].map(e=>e.u));if(G.land)live.add(G.land.u);G.arrows=G.arrows.filter(a=>live.has(a[0]))}
 function act(fn,text){if(!G||spectate)return;fn();pruneArrows();if(text)log(text);saveG();render();pushPresence()}
 const cn=i=>CARDS[i].name;
 
@@ -2475,26 +2489,30 @@ let takenAtt=[];
 function take(z,ix,keep){
   if(z==='hand')return G.hand.splice(ix,1)[0];
   if(z==='deck')return G.deck.splice(ix,1)[0];
-  if(z==='H'||z==='D')return G[z].splice(ix,1)[0];
+  if(z==='H'){G.Hn.splice(ix,1);return G.H.splice(ix,1)[0]}
+  if(z==='D')return G.D.splice(ix,1)[0];
+  if(z==='S')return G.S.splice(ix,1)[0].i;
   if(FIELD.has(z)){const e=G[z].splice(ix,1)[0];const att=e.att||[];takenAtt=keep?att:[];
-    if(!keep&&att.length){G.H.push(...att);log(`การ์ดที่แนบใต้ ${cn(e.i)} ${att.length} ใบ → นรก`)}return e.i}
+    if(!keep&&att.length){toHell(...att);log(`การ์ดที่แนบใต้ ${cn(e.i)} ${att.length} ใบ → นรก`)}return e.i}
   if(z==='life')return G.life.splice(ix,1)[0].i;
   if(z==='land'){const i=G.land.i;G.land=null;return i}
   if(z==='reveal')return null;
 }
-const ZN={hand:'มือ',deckTop:'บนเด็ค',deckBottom:'ใต้เด็ค',A:'Avatar Zone',C:'Construct Zone',M:'Magic Zone',H:'นรก',D:'มิติมืด',land:'Land Magic',life:'Life'};
+const ZN={hand:'มือ',deckTop:'บนเด็ค',deckBottom:'ใต้เด็ค',A:'Avatar Zone',C:'Construct Zone',M:'Magic Zone',H:'นรก',D:'มิติมืด',S:'โซนสอดแนม',land:'Land Magic',life:'Life'};
 function put(i,to){
   if(to==='hand')G.hand.push(i);
   else if(to==='deckTop')G.deck.unshift(i);
   else if(to==='deckBottom')G.deck.push(i);
-  else if(to==='H'||to==='D')G[to].push(i);
+  else if(to==='H')toHell(i);
+  else if(to==='D')G.D.push(i);
+  else if(to==='S')G.S.push({i,u:rid()});
   else if(to==='A'||to==='C'||to==='M')G[to].push({i,s:0,f:0,m:0,u:rid()});
-  else if(to==='land'){if(G.land)G.H.push(G.land.i);G.land={i,s:0,f:0,m:0,u:rid()};G.landTs=Date.now()}
+  else if(to==='land'){if(G.land)toHell(G.land.i);G.land={i,s:0,f:0,m:0,u:rid()};G.landTs=Date.now()}
   else if(to==='life')G.life.push({i,up:1,u:rid()});
   G.reveal=G.reveal.filter(x=>x!==i||G.hand.includes(i));
 }
 function move(z,ix,to,verb){
-  const i=(z==='A'||z==='C'||z==='M')?G[z][ix].i:z==='hand'?G.hand[ix]:z==='life'?G.life[ix].i:z==='land'?G.land.i:G[z][ix];
+  const i=(z==='A'||z==='C'||z==='M'||z==='S')?G[z][ix].i:z==='hand'?G.hand[ix]:z==='life'?G.life[ix].i:z==='land'?G.land.i:G[z][ix];
   const secret=(z==='hand'||z==='deck')&&(to==='deckTop'||to==='deckBottom'||to==='hand');
   const keep=FIELD.has(z)&&FIELD.has(to);
   act(()=>{take(z,ix,keep);put(i,to);if(keep&&takenAtt.length)G[to][G[to].length-1].att=takenAtt},verb||(secret?`ย้ายการ์ด 1 ใบไป${ZN[to]}`:`${cn(i)} → ${ZN[to]}`));
@@ -2525,7 +2543,7 @@ function draw(n=1){act(()=>{for(let k=0;k<n&&G.deck.length;k++)G.hand.push(G.dec
 // so the room keeps working if one of them is down or blocked.
 const BROKERS=(()=>{const q=new URLSearchParams(location.search).get('broker');
   return q?q.split(','):['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt','wss://test.mosquitto.org:8081/mqtt','wss://mqtt.eclipseprojects.io:443/mqtt']})();
-const APP_VER='v8';
+const APP_VER='v9';
 const TOPIC='bottcg-tl/v2/';
 let clients=[],states=new Map(),netGen=0,pushT=null,beatT=null;
 let peers=[];
@@ -2535,20 +2553,22 @@ function publicState(){
   if(!G||spectate)return {g:roomCode,nm:nick(),pl:0};
   const fe=e=>[e.f?-1:e.i,e.s?1:0,e.f?1:0,e.m||0,e.u,e.x?1:0,(e.n||'').slice(0,24),(e.att||[]).slice(0,6)];
   const st={g:roomCode,nm:nick(),pl:1,pid:G.pid,tn:G.turn,dk:G.deck.length,hd:G.hand.length,hits:G.hits,
-    lf:G.life.map(e=>[e.up?e.i:-1,e.u]),A:G.A.map(fe),C:G.C.map(fe),M:G.M.map(fe),H:G.H.slice(),D:G.D.slice(),
+    lf:G.life.map(e=>[e.up?e.i:-1,e.u]),A:G.A.map(fe),C:G.C.map(fe),M:G.M.map(fe),H:G.H.slice(),Hn:G.Hn.slice(),D:G.D.slice(),
+    SC:G.S.map(e=>[e.i,e.u]),cs:chatSelf,
     ld:G.land?[G.land.i,G.landTs,G.land.u,G.land.x?1:0,(G.land.n||'').slice(0,24)]:null,rv:G.reveal.slice(0,8),ar:G.arrows.slice(-6),lg:G.log.slice(-6).map(e=>[e.t,e.x.slice(0,70)])};
   const size=()=>new Blob([JSON.stringify(st)]).size;
   while(size()>3900&&st.lg.length)st.lg.shift();
-  while(size()>3900&&st.H.length>10)st.H.splice(0,5);
+  while(size()>3900&&st.H.length>10){st.H.splice(0,5);st.Hn.splice(0,5)}
   return st;
 }
 const K=i=>(i==null||i<0)?-1:key(CARDS[i]);
 const I=k=>typeof k==='string'?(BYKEY.has(k)?BYKEY.get(k).i:-1):(k==null?-1:k);
 function encodeState(st){if(!st.pl)return st;const e=a=>{const r=[K(a[0]),...a.slice(1)];if(Array.isArray(r[7]))r[7]=r[7].map(K);return r};
-  return {...st,lf:st.lf.map(e),A:st.A.map(e),C:st.C.map(e),M:st.M.map(e),H:st.H.map(K),D:st.D.map(K),ld:st.ld?[K(st.ld[0]),...st.ld.slice(1)]:null,rv:st.rv.map(K)}}
+  return {...st,lf:st.lf.map(e),A:st.A.map(e),C:st.C.map(e),M:st.M.map(e),SC:(st.SC||[]).map(e),H:st.H.map(K),D:st.D.map(K),ld:st.ld?[K(st.ld[0]),...st.ld.slice(1)]:null,rv:st.rv.map(K)}}
 function decodeState(st){if(!st||!st.pl)return st||{};const d=a=>{if(!Array.isArray(a))return a;const r=[I(a[0]),...a.slice(1)];if(Array.isArray(r[7]))r[7]=r[7].map(I).filter(x=>x>=0);return r};const ok=i=>i>=0;
   const ld=st.ld&&I(st.ld[0])>=0?[I(st.ld[0]),...st.ld.slice(1)]:null;
-  return {...st,lf:(st.lf||[]).map(d),A:(st.A||[]).map(d),C:(st.C||[]).map(d),M:(st.M||[]).map(d),H:(st.H||[]).map(I).filter(ok),D:(st.D||[]).map(I).filter(ok),ld,rv:(st.rv||[]).map(I).filter(ok),ar:st.ar||[]}}
+  const hz=(st.H||[]).map((k,j)=>[I(k),(st.Hn||[])[j]]).filter(x=>x[0]>=0);
+  return {...st,lf:(st.lf||[]).map(d),A:(st.A||[]).map(d),C:(st.C||[]).map(d),M:(st.M||[]).map(d),SC:(st.SC||[]).map(d),H:hz.map(x=>x[0]),Hn:hz.map(x=>x[1]),D:(st.D||[]).map(I).filter(ok),ld,rv:(st.rv||[]).map(I).filter(ok),ar:st.ar||[]}}
 const myState=()=>encodeState(publicState());
 const myTopic=()=>TOPIC+roomCode+'/'+myId;
 function publishMine(){
@@ -2615,7 +2635,7 @@ function onRoom(){
   O=players[0]||null;if(spectate)G=null;
   for(const p of players)(p.lg||[]).forEach(([t,x])=>oppLog.set(p.peer+':'+t,{t,x,who:p.nm}));
   // shared Land Magic: the newer one replaces the older
-  if(G&&!spectate&&O&&O.ld&&G.land&&O.ld[1]>G.landTs){const i=G.land.i;G.H.push(i);G.land=null;log(`${cn(i)} ถูกแทนที่ด้วย Land Magic ของอีกฝ่าย → นรก`);saveG();pushPresence()}
+  if(G&&!spectate&&O&&O.ld&&G.land&&O.ld[1]>G.landTs){const i=G.land.i;toHell(i);G.land=null;log(`${cn(i)} ถูกแทนที่ด้วย Land Magic ของอีกฝ่าย → นรก`);saveG();pushPresence()}
   if(view==='game')render();else if(view==='lobby')renderLobby();
 }
 
@@ -2732,13 +2752,15 @@ function drawArrowsNow(){
 addEventListener('resize',drawArrows);addEventListener('scroll',drawArrows,true);
 let modalEl=null;
 function closeModal(){if(modalEl){modalEl.remove();modalEl=null}}
-function openModal(title,cards,onCard,extra){
+function openModal(title,cards,onCard,extra,order){
   closeModal();const w=document.createElement('div');w.className='modal';
   w.innerHTML=`<div class="box"><div class="row"><h3 style="flex:1">${esc(title)}</h3><button>ปิด</button></div><div class="grid"></div></div>`;
   w.querySelector('button').onclick=closeModal;w.onclick=e=>{if(e.target===w)closeModal()};
   const g=w.querySelector('.grid');
   if(!cards.length)g.innerHTML='<span class="muted">ไม่มีการ์ด</span>';
-  cards.forEach((i,ix)=>{const c=cardEl(i,{mine:!!onCard});if(onCard)c.onclick=()=>onCard(ix,c);g.appendChild(c)});
+  cards.forEach((i,ix)=>{const c=cardEl(i,{mine:!!onCard});if(onCard)c.onclick=()=>onCard(ix,c);
+    if(order&&order[ix]){c.classList.add('newhell');const b=document.createElement('span');b.className='hnum';b.textContent=order[ix];c.appendChild(b)}
+    g.appendChild(c)});
   if(extra)w.querySelector('.box').appendChild(extra);
   document.body.appendChild(w);modalEl=w;
 }
@@ -2782,22 +2804,26 @@ function fieldMenu(z,ix,el){
   if(G.A.length+G.C.length+G.M.length>1)items.push(['แนบใบนี้ใต้การ์ดอื่น…',()=>startAttach({z,ix},c.name)]);
   items.push([e.f?'หงายการ์ด':'คว่ำการ์ด',()=>act(()=>{e.f=e.f?0:1},e.f?`หงาย ${c.name}`:`คว่ำการ์ด 1 ใบ`)]);
   items.push('-');
+  if(O&&!spectate)items.push(['มอบการควบคุมให้อีกฝ่าย',()=>giveControl(z,ix)]);
   items.push(['ทำลาย → นรก',()=>move(z,ix,'H',`${c.name} ถูกทำลาย → นรก`)]);
   items.push(...toZoneItems(z,ix,['ลงนรก',z==='A'?'อัญเชิญ → Avatar Zone':z==='M'?'ลง Magic Zone':'สร้าง → Construct Zone']));
   openMenu(el,c.name,items);
 }
 function pileMenu(z,el){
   const name=ZN[z];
-  openModal(`${name} (${G[z].length})`,G[z].slice(),(ix,cel)=>{const i=G[z][ix];openMenu(cel,cn(i),toZoneItems(z,ix,[z==='H'?'ลงนรก':'เนรเทศ → มิติมืด']).map(it=>[it[0],()=>{it[1]();closeModal();pileMenu(z,el)}]))});
+  const order=z==='H'?hellOrder(G.Hn,turnEpoch()):null;
+  const nNew=order?order.filter(Boolean).length:0;
+  openModal(`${name} (${G[z].length})${nNew?` · ลงนรกเทิร์นนี้ ${nNew} ใบ (มีเลขลำดับ)`:''}`,G[z].slice(),(ix,cel)=>{const i=G[z][ix];openMenu(cel,cn(i),toZoneItems(z,ix,[z==='H'?'ลงนรก':'เนรเทศ → มิติมืด']).map(it=>[it[0],()=>{it[1]();closeModal();pileMenu(z,el)}]))},null,order);
 }
 function deckMenu(el){
   const n=G.deck.length;
   openMenu(el,`เด็ค (${n} ใบ)`,[
     ['จั่ว 1 ใบ',()=>draw(1)],['จั่ว 2 ใบ',()=>draw(2)],
+    ['เปิดบนสุด → โซนสอดแนม',()=>{if(G.deck.length)move('deck',0,'S',`เปิดการ์ดบนสุดลงโซนสอดแนม: ${cn(G.deck[0])}`)}],
     ['ดูบนสุด 3 ใบ',()=>peekTop(3)],['ดูบนสุด 5 ใบ',()=>peekTop(5)],
     ['ค้นหาในเด็ค',()=>searchDeck()],
-    ['ธรณีสูบ 1 (บนสุดลงนรก)',()=>act(()=>{const i=G.deck.shift();if(i!=null)G.H.push(i)},'ธรณีสูบ 1 ใบ')],
-    ['ธรณีสูบ 3',()=>act(()=>{for(let k=0;k<3&&G.deck.length;k++)G.H.push(G.deck.shift())},'ธรณีสูบ 3 ใบ')],
+    ['ธรณีสูบ 1 (บนสุดลงนรก)',()=>act(()=>{const i=G.deck.shift();if(i!=null)toHell(i)},'ธรณีสูบ 1 ใบ')],
+    ['ธรณีสูบ 3',()=>act(()=>{for(let k=0;k<3&&G.deck.length;k++)toHell(G.deck.shift())},'ธรณีสูบ 3 ใบ')],
     ['เปิดบนสุดให้ดู',()=>{const i=G.deck[0];if(i!=null)act(()=>{},`เปิดการ์ดบนสุดของเด็ค: ${cn(i)}`)}],
     ['สับเด็ค',()=>act(()=>shuffle(G.deck),'สับเด็ค')],
   ]);
@@ -2824,6 +2850,47 @@ function searchDeck(){
       ['เนรเทศ → มิติมืด',()=>{move('deck',ix,'D');show()}]])},done)};
   act(()=>{},'ค้นหาในเด็ค');show();
 }
+function scoutMenu(ix,el){
+  const e=G.S[ix];const name=cn(e.i);
+  openMenu(el,name+' · โซนสอดแนม',[['เล็งเป้าหมาย (ลูกศร)',()=>startAim(e.u,name)],'-',...toZoneItems('S',ix,[])]);
+}
+// ---------- control of field cards between players ----------
+// Each player's browser owns its own table, so taking a card is a request: the owner's page removes it
+// and sends it back; giving a card sends it straight to the other player's page.
+const packEntry=(e,z)=>({z,k:key(CARDS[e.i]),att:(e.att||[]).map(a=>key(CARDS[a])),s:e.s?1:0,m:e.m||0,x:e.x?1:0,n:e.n||'',f:e.f?1:0});
+function unpackEntry(p){const c=BYKEY.get(p&&p.k);if(!c)return null;
+  return {i:c.i,s:p.s?1:0,f:p.f?1:0,m:+p.m||0,x:p.x?1:0,n:String(p.n||'').slice(0,24),att:(p.att||[]).map(k=>BYKEY.get(k)).filter(Boolean).map(c=>c.i),u:rid()}}
+const ctlMsg=(op,to,extra)=>({type:'ctl',op,g:roomCode,k:chatSelf+'-'+Date.now()+'-'+rid(),from:chatSelf,to,nm:nick(),...extra});
+function requestControl(e,z){
+  if(!O||!O.cs){toast('อีกฝ่ายต้องใช้เวอร์ชันล่าสุดก่อน');return}
+  if(!e.u)return;sendChatNet(ctlMsg('take',O.cs,{u:e.u}));toast('ส่งคำขอยึดการควบคุมแล้ว');
+}
+function giveControl(z,ix){
+  if(!O||!O.cs){toast('อีกฝ่ายต้องใช้เวอร์ชันล่าสุดก่อน');return}
+  const e=G[z][ix];const p=packEntry(e,z);
+  act(()=>{G[z].splice(ix,1)},`มอบการควบคุม ${cn(e.i)} ให้ ${O.nm||'อีกฝ่าย'}`);
+  sendChatNet(ctlMsg('give',O.cs,{e:p}));
+}
+function handleCtl(m){
+  if(!G||spectate||m.to!==chatSelf)return;
+  if(m.op==='take'){
+    let z=null,ix=-1;for(const zz of FIELD){const k=G[zz].findIndex(x=>x.u===m.u);if(k>=0){z=zz;ix=k;break}}
+    if(!z){sendChatNet(ctlMsg('deny',m.from,{}));return}
+    const e=G[z][ix];const p=packEntry(e,z);
+    act(()=>{G[z].splice(ix,1)},`${cn(e.i)} ถูกยึดการควบคุมโดย ${String(m.nm||'อีกฝ่าย').slice(0,20)}`);
+    sendChatNet(ctlMsg('give',m.from,{e:p}));
+  }else if(m.op==='give'){
+    const e=unpackEntry(m.e);if(!e)return;const z=FIELD.has(m.e.z)?m.e.z:'A';
+    act(()=>{G[z].push(e)},`ได้รับการควบคุม ${cn(e.i)} จาก ${String(m.nm||'อีกฝ่าย').slice(0,20)}`);
+    toast(`ได้รับการควบคุม ${cn(e.i)}`);
+  }else if(m.op==='deny')toast('ยึดไม่สำเร็จ: การ์ดใบนั้นไม่อยู่บนสนามแล้ว');
+}
+function oppCardMenu(e,el){
+  const items=[];
+  if(!spectate&&G&&e.u)items.push(['ยึดการควบคุมมาฝั่งเรา',()=>requestControl(e)]);
+  if(e.i!=null)items.push(['ดูการ์ด',()=>showPreview(e.i)]);
+  if(items.length)openMenu(el,e.i!=null?cn(e.i):'การ์ดคว่ำ',items);
+}
 function lifeMenu(ix,el){
   const e=G.life[ix];
   if(!e.up){act(()=>{e.up=1;G.hits++},`Life ถูกหงาย: ${cn(e.i)}`);return}
@@ -2837,7 +2904,10 @@ function makeDrop(el,to){
   el.addEventListener('dragover',e=>{if(dragSrc){e.preventDefault();el.classList.add('drop')}});
   el.addEventListener('dragleave',()=>el.classList.remove('drop'));
   el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('drop');if(!dragSrc)return;const s=dragSrc;dragSrc=null;
-    if((s.z===to)||(s.z==='hand'&&to==='hand'))return;move(s.z,s.ix,to)});
+    if((s.z===to)||(s.z==='hand'&&to==='hand'))return;
+    if(s.z==='deck'&&to==='deckTop')return;
+    if(s.z==='deck'&&to==='hand'){draw(1);return}
+    move(s.z,s.ix,to)});
 }
 
 // ---------- rendering ----------
@@ -2895,36 +2965,47 @@ function renderSide(st,mine,host,label){
   if(lifeArr.length&&up>=lifeArr.length){const m=document.createElement('div');m.className='lostmsg';m.style.fontSize='12px';m.style.textAlign='center';m.style.maxWidth='var(--ch)';m.textContent=mine?'Life หมด · โดนอีกครั้ง = แพ้':'Life หมด';ls_.appendChild(m)}
   const ent=e=>pub?{i:e[0]<0?null:e[0],s:e[1],f:e[2],m:e[3],u:e[4],x:e[5],n:e[6],att:(e[7]||[]).filter(a=>a>=0)}:e;
   const fcOf=e=>fieldCard(e.i,{back:!!(e.f||e.i==null),rest:!!e.s,mine,mod:e.m,x:e.x,n:e.n,u:e.u,att:e.att});
+  // opponent's field cards: click for "take control" / view
+  const oppClick=(c,e)=>{if(!mine)c.onclick=()=>oppCardMenu({i:(e.f||e.i==null)?null:e.i,u:e.u},c)};
   // avatar zone
   const A=st.A.map(ent);
   const av=zone('Avatar Zone',`${A.length}/6`);av.classList.add('z-av');const as=av.querySelector('.slots');
-  A.forEach((e,ix)=>{const c=fcOf(e);if(mine){c.onclick=()=>fieldMenu('A',ix,c);makeDrag(c,'A',ix)}as.appendChild(c)});
+  A.forEach((e,ix)=>{const c=fcOf(e);if(mine){c.onclick=()=>fieldMenu('A',ix,c);makeDrag(c,'A',ix)}else oppClick(c,e);as.appendChild(c)});
   slotsFill(as,Math.max(0,4-A.length));
   // construct
   const C=st.C.map(ent);
   const co=zone('Construct',`${C.length}/3`);const cs=co.querySelector('.slots');
-  C.forEach((e,ix)=>{const c=fcOf(e);if(mine){c.onclick=()=>fieldMenu('C',ix,c);makeDrag(c,'C',ix)}cs.appendChild(c)});
+  C.forEach((e,ix)=>{const c=fcOf(e);if(mine){c.onclick=()=>fieldMenu('C',ix,c);makeDrag(c,'C',ix)}else oppClick(c,e);cs.appendChild(c)});
   slotsFill(cs,Math.max(0,3-C.length));
   // magic
   const M=st.M.map(ent);
   const mg=zone('Magic Zone',M.length||'');mg.classList.add('z-mg');const ms=mg.querySelector('.slots');
-  M.forEach((e,ix)=>{const c=fcOf(e);if(mine){c.onclick=()=>fieldMenu('M',ix,c);makeDrag(c,'M',ix)}ms.appendChild(c)});
+  M.forEach((e,ix)=>{const c=fcOf(e);if(mine){c.onclick=()=>fieldMenu('M',ix,c);makeDrag(c,'M',ix)}else oppClick(c,e);ms.appendChild(c)});
+  // scout zone: cards turned face up from the top of the deck, visible to both players
+  const SC=pub?(st.SC||[]).map(a=>({i:a[0]>=0?a[0]:null,u:a[1]})):(st.S||[]);
+  const sz=zone('สอดแนม',SC.length||'');sz.classList.add('z-sc');const ss=sz.querySelector('.slots');
+  SC.forEach((e,ix)=>{const c=fieldCard(e.i,{mine,u:e.u});if(mine){c.onclick=()=>scoutMenu(ix,c);makeDrag(c,'S',ix)}ss.appendChild(c)});
+  if(!SC.length)slotsFill(ss,1);
   // piles
-  const H=pub?st.H:st.H, D=pub?st.D:st.D;
+  const H=st.H, D=st.D;
+  const ep=spectate?peers.filter(p=>p.pl===1).reduce((a,p)=>a+(p.tn||0),0):turnEpoch();
+  const hOrder=hellOrder(st.Hn,ep);const hNew=hOrder.filter(Boolean).length;
   const piles=document.createElement('div');piles.className='piles';
-  piles.append(
-    pileEl('เด็ค',deckN,null,mine?el=>deckMenu(el):null,mine?'deckTop':null,true),
-    pileEl('นรก',H.length,H[H.length-1],el=>mine?pileMenu('H',el):openModal(`นรกของ ${label}`,H.slice()),mine?'H':null),
+  const deckPile=pileEl('เด็ค',deckN,null,mine?el=>deckMenu(el):null,mine?'deckTop':null,true);
+  if(mine&&deckN){const dc=deckPile.querySelector('.card');makeDrag(dc,'deck',0);dc.title='ลากไปที่มือเพื่อจั่ว · คลิกเพื่อดูคำสั่ง'}
+  const hellPile=pileEl('นรก',H.length,H[H.length-1],el=>mine?pileMenu('H',el):openModal(`นรกของ ${label}${hNew?` · ลงนรกเทิร์นนี้ ${hNew} ใบ`:''}`,H.slice(),null,null,hOrder),mine?'H':null);
+  if(hNew){const b=document.createElement('span');b.className='hnew';b.textContent='+'+hNew;b.title=`ลงนรกเทิร์นนี้ ${hNew} ใบ`;hellPile.querySelector('.slots').appendChild(b);hellPile.classList.add('hashnew')}
+  piles.append(deckPile,hellPile,
     pileEl('มิติมืด',D.length,D[D.length-1],el=>mine?pileMenu('D',el):openModal(`มิติมืดของ ${label}`,D.slice()),mine?'D':null)
   );
-  if(mine){makeDrop(av,'A');makeDrop(co,'C');makeDrop(mg,'M')}
+  if(mine){makeDrop(av,'A');makeDrop(co,'C');makeDrop(mg,'M');makeDrop(sz,'S')}
   co.classList.add('z-co');
-  // Construct | Avatar on one row, Magic Zone under both, piles on the right.
+  // Construct | Avatar | Scout on one row, Magic Zone under them, piles on the right.
   // The opponent's side is flipped top-to-bottom so both Avatar rows face the middle.
   const r1=document.createElement('div');r1.className='zgrid';
   const place=(el,c,r)=>{el.style.gridColumn=c;el.style.gridRow=r};
-  place(co,'1',mine?'1':'2');place(av,'2',mine?'1':'2');place(mg,'1 / 3',mine?'2':'1');place(piles,'3','1 / 3');
-  r1.append(co,av,mg,piles);
+  place(co,'1',mine?'1':'2');place(av,'2',mine?'1':'2');place(sz,'3',mine?'1':'2');place(mg,'1 / 4',mine?'2':'1');place(piles,'4','1 / 3');
+  r1.append(co,av,sz,mg,piles);
   // hand
   const hd=document.createElement('div');hd.className='hand'+(mine?'':' op');
   hd.dataset.u='hand-'+pid;hd.dataset.label='มือของ '+label;
@@ -2990,7 +3071,7 @@ function sizeBoard(){
   // the board decides the card size; the side panel just fits whatever height is left
   const bottomPad=parseFloat(getComputedStyle(document.documentElement).paddingBottom)||0;
   const overBy=()=>col.getBoundingClientRect().bottom+scrollY+10+bottomPad-innerHeight;
-  const UH=6.3, UW=12.5; // board height and width measured in card heights / card widths
+  const UH=6.3, UW=14.2; // board height and width measured in card heights / card widths
   let cw=Math.max(34,Math.min(112,(innerHeight-260)/UH/1.36,W/UW));set(cw);
   for(let k=0;k<8;k++){
     const over=overBy();if(over<=0||cw<=34)break;
@@ -3010,6 +3091,7 @@ const chatSelf=rid()+rid();
 const chatSeen=new Set();let chatLog=[];
 function receiveChat(m){
   if(!m||typeof m.k!=='string'||chatSeen.has(m.k)||m.g!==roomCode)return;chatSeen.add(m.k);
+  if(m.type==='ctl'){handleCtl(m);return}
   const mine=m.id===chatSelf;
   chatLog.push({t:Date.now(),nm:String(m.nm||'').slice(0,20)||'ผู้เล่น',tx:String(m.tx||'').slice(0,200),me:mine});
   if(chatLog.length>120)chatLog.shift();
